@@ -48,7 +48,7 @@ header > div:nth-child(2) {
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 # ---- Home Page ----
-st.title("🌐 Welcome to My App")
+st.title("🌐 Explore AI")
 
 
 
@@ -71,6 +71,3 @@ st.link_button("CSV VISUALISATION", "https://csvvisualisation.streamlit.app")
 
 # st.link_button("Go to MODEL LISTS", "https://ashishraxaul.streamlit.app/list_models")
 
-# ✅ Sidebar content
-st.sidebar.title("📌 Navigation")
-st.sidebar.info("👉 Use the selector above to switch pages.\n\nYou’re currently on **Home**.")
