@@ -1,22 +1,7 @@
 reportlab
-# Pillow
-# xlsxwriter
 google-generativeai
-# langchain-google-genai
-# langchain-experimental
-# tabulate
 streamlit>=1.28.0
-# pandas>=2.0.0
 numpy>=1.24.0
-# plotly>=5.15.0
-# prophet>=1.1.4
-# seaborn>=0.12.0
-# matplotlib>=3.7.0
-# statsmodels>=0.14.0
-# openpyxl>=3.1.0
-# kaleido>=0.2.1
-# streamlit-audiorecorder
-# audioread
 google-genai
 soundfile
 requests
