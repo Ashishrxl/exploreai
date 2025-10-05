@@ -293,7 +293,7 @@ def generate_pdf_reportlabb(text, title="AI Roleplay Story"):
     return buf 
 
 # --- Main: Generate story + audio ---
-if st.button("Generate Story & Audio"):
+if st.button("Generate Story"):
     # Story generation
     story_progress = st.progress(0, text="Generating story...")
     story_placeholder = st.empty()
