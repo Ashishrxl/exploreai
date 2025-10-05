@@ -54,7 +54,6 @@ st.title("🌐 Welcome to My App")
 
 
 
-st.link_button("Go to CSVVISUALISATION", "https://csvvisualisation.streamlit.app")
 
 st.link_button("Go to AUDIOSTORY", "https://exploreai.streamlit.app/audiostory")
 
@@ -66,6 +65,9 @@ st.link_button("Go to AUDIOSTORY", "https://exploreai.streamlit.app/audiostory")
 st.link_button("Go to SINGIFY", "https://exploreai.streamlit.app/singify")
 
 st.link_button("Go to AIPODCAST", "https://exploreai.streamlit.app/aipodcast")
+
+st.link_button("Go to CSVVISUALISATION", "https://csvvisualisation.streamlit.app")
+
 
 # st.link_button("Go to MODEL LISTS", "https://ashishraxaul.streamlit.app/list_models")
 
