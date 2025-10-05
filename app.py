@@ -55,7 +55,7 @@ st.title("🌐 Welcome to My App")
 
 
 
-st.link_button("AUDIOSTORY", "https://exploreai.streamlit.app/audiostory")
+st.link_button("AUDIO STORY", "https://exploreai.streamlit.app/audiostory")
 
 # st.link_button("Go to AUDIOSTORY2", "https://ashishraxaul.streamlit.app/audiostory2")
 
@@ -64,7 +64,7 @@ st.link_button("AUDIOSTORY", "https://exploreai.streamlit.app/audiostory")
 
 st.link_button("SINGIFY", "https://exploreai.streamlit.app/singify")
 
-st.link_button("AIPODCAST", "https://exploreai.streamlit.app/aipodcast")
+st.link_button("AI PODCAST", "https://exploreai.streamlit.app/aipodcast")
 
 st.link_button("CSV VISUALISATION", "https://csvvisualisation.streamlit.app")
 
