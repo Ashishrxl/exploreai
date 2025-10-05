@@ -66,7 +66,7 @@ st.link_button("SINGIFY", "https://exploreai.streamlit.app/singify")
 
 st.link_button("AIPODCAST", "https://exploreai.streamlit.app/aipodcast")
 
-st.link_button("CSVVISUALISATION", "https://csvvisualisation.streamlit.app")
+st.link_button("CSV VISUALISATION", "https://csvvisualisation.streamlit.app")
 
 
 # st.link_button("Go to MODEL LISTS", "https://ashishraxaul.streamlit.app/list_models")
