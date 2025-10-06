@@ -375,12 +375,14 @@ if "story" in st.session_state:
     st.subheader("Story Script")
     st.write(st.session_state["story"])
     pdf_buffer = save_story_as_pdf(st.session_state["story"], title = "My AI Roleplay")
+/*
     st.download_button(
         label="Download Story as PDF",
         data=pdf_buffer,
         file_name="story.pdf",
         mime="application/pdf"
     )
+*/
 
 # --- Display audio persistently ---
 if "audio_bytes" in st.session_state:
