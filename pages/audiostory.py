@@ -62,9 +62,75 @@ client = genai.Client(api_key=api_key)
 st.set_page_config(page_title="AI Roleplay Story", layout="wide")
 st.title("AI Roleplay Story Generator")
 
+genres = [
+    # Fantasy & related
+    "Fantasy",
+    "High Fantasy",
+    "Epic Fantasy",
+    "Urban Fantasy",
+    "Sword and Sorcery",
+    "Mythic Fantasy",
+    "Fairy Tale",
+    "Magical Realism",
+    "Gaslamp Fantasy",
+
+    # Science Fiction & related
+    "Science Fiction",
+    "Soft Science Fiction",
+    "Space Opera",
+    "Time Travel",
+    "Alternate History",
+    "Speculative Fiction",
+
+    # Mystery & Adventure
+    "Mystery",
+    "Cozy Mystery",
+    "Detective Fiction",
+    "Adventure",
+    "Action",
+    "Exploration Fiction",
+    "Quest Fiction",
+    "Pirate Adventure",
+
+    # Friendship, Family, & Growing Up
+    "Coming of Age",
+    "Slice of Life",
+    "Family Drama",
+    "School Story",
+    "Animal Story",
+    "Friendship Story",
+
+    # Historical & Cultural
+    "Historical Fiction",
+    "Historical Adventure",
+    "Mythology Retelling",
+
+    # Humor & Lighthearted
+    "Comedy",
+    "Satire",
+    "Parody",
+    "Farce",
+    "Light Fantasy",
+    "Romantic Comedy",
+
+    # Imaginative or Moral Stories
+    "Fable",
+    "Folktale",
+    "Legend",
+    "Adventure Comedy",
+    "Fantasy Adventure",
+
+    # Educational or Wholesome
+    "Educational Fiction",
+    "Environmental Fiction",
+    "Inspirational Fiction",
+    "Eco-Fiction",
+    "Science Fantasy"
+]
+
 # Inputs
-genre = st.text_input("Enter story genre", "Cyberpunk mystery")
-characters = st.text_area("List characters (comma separated)", "Detective, Hacker, AI sidekick")
+genre = st.selectbox("Select story genre", genres)
+characters = st.text_area("List characters (comma separated)", "Dog, cat, lion")
 length = st.selectbox("Story length", ["Short", "Medium", "Long"])
 language = st.selectbox("Select story language", ["English", "Hindi", "Bhojpuri"])
 
