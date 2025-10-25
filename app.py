@@ -57,6 +57,9 @@ st.title("🌐 Explore AI")
 
 st.link_button("AUDIO STORY", "https://exploreai.streamlit.app/audiostory")
 
+st.link_button("TEXT 2 AUDIO", "https://exploreai.streamlit.app/text2audio")
+
+
 # st.link_button("Go to AUDIOSTORY2", "https://ashishraxaul.streamlit.app/audiostory2")
 
 # st.link_button("AUDIOSTORY3", "https://ashishraxaul.streamlit.app/audiostory3")
