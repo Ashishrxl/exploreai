@@ -422,11 +422,11 @@ def display_results():
                 with open(st.session_state.original_path, "rb") as f:
                    # st.download_button(
                         "📥 Download Old Version", 
-                        f.read(), 
-                        file_name="original_audio.wav", 
-                        mime="audio/wav",
-                        key="download_original"
-                    )
+                      #  f.read(), 
+                        # file_name="original_audio.wav", 
+                     #   mime="audio/wav",
+                        # key="download_original"
+          #          )
 
 # -------------------------
 # Main Process Button
