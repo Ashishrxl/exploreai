@@ -23,6 +23,7 @@ page_css = """
 <style>
 html, body, .stApp {
     height: 100%;
+    width: 100%;
     margin: 0;
     padding: 0;
     background: linear-gradient(135deg, #1e3c72, #2a5298);
@@ -32,16 +33,18 @@ html, body, .stApp {
 
 /* Remove Streamlit padding */
 section.main > div {
-    padding-top: 0rem !important;
-    padding-bottom: 0rem !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
 }
 
-/* Wrapper ensures tight layout */
+/* Wrapper fills screen height */
 .wrapper {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    justify-content: flex-start;
+    justify-content: center; /* centers vertically */
+    align-items: center;
+    box-sizing: border-box;
 }
 
 /* Title */
@@ -120,13 +123,16 @@ section.main > div {
     line-height: 1.4;
 }
 
-/* Prevent white/blue gaps */
+/* Force background fill */
 body {
+    min-height: 100vh;
     background-attachment: fixed;
+    background-repeat: no-repeat;
+    background-size: cover;
     overscroll-behavior: none;
 }
 
-/* Mobile adjustments */
+/* Mobile tweaks */
 @media (max-width: 600px) {
     .title { font-size: 2rem; margin: 1.5rem 0 1rem 0; }
     .btn { font-size: 1rem; }
@@ -136,7 +142,7 @@ body {
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-  // Animate cards on view
+  // Animate cards
   const cards = document.querySelectorAll('.card');
   const observer = new IntersectionObserver(entries => {
     entries.forEach(entry => {
@@ -145,9 +151,9 @@ document.addEventListener("DOMContentLoaded", function() {
   }, { threshold: 0.1 });
   cards.forEach(card => observer.observe(card));
 
-  // Auto-resize parent iframe to fit content (fix white/blue gaps)
+  // Resize Streamlit frame height dynamically
   const resizeObserver = new ResizeObserver(() => {
-    const height = document.body.scrollHeight;
+    const height = Math.max(document.body.scrollHeight, window.innerHeight);
     window.parent.postMessage({ streamlitResizeFrame: height }, "*");
   });
   resizeObserver.observe(document.body);
@@ -200,5 +206,5 @@ page_html = """
 </div>
 """
 
-# Note: height=None + scrolling=False lets iframe auto-adjust dynamically
+# Dynamic full-height layout (no fixed height)
 html(page_css + page_html, height=None, scrolling=False)
