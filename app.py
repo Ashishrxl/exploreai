@@ -9,46 +9,23 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ---- Hide Streamlit Branding & Padding ----
+# ---- Hide Streamlit Branding ----
 hide_ui = """
 <style>
 #MainMenu, footer, header {visibility: hidden;}
 [data-testid="stToolbar"], [data-testid="stStatusWidget"] {display: none !important;}
-[data-testid="stAppViewContainer"], [data-testid="stVerticalBlock"] {
-    padding: 0 !important;
-    margin: 0 !important;
-}
 </style>
 """
 st.markdown(hide_ui, unsafe_allow_html=True)
 
-# ---- CSS + HTML ----
+# ---- Animated CSS + HTML ----
 page_css = """
 <style>
-html, body, .stApp {
-    height: 100%;
-    margin: 0;
-    padding: 0;
-    width: 100%;
+body, .stApp {
     background: linear-gradient(135deg, #1e3c72, #2a5298);
+    color: white;
     font-family: 'Poppins', sans-serif;
-    overflow: hidden;
-}
-
-/* Fullscreen section with scroll */
-.fullscreen {
-    position: fixed;
-    top: 0; left: 0;
-    width: 100vw;
-    height: 100vh;
-    overflow-y: auto;
     overflow-x: hidden;
-    -webkit-overflow-scrolling: touch;
-    background: linear-gradient(135deg, #1e3c72, #2a5298);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
 }
 
 /* Title */
@@ -56,7 +33,7 @@ html, body, .stApp {
     text-align: center;
     font-size: 2.5rem;
     font-weight: 800;
-    margin: 2rem 0 1.5rem 0;
+    margin-bottom: 1.5rem;
     background: linear-gradient(90deg, #00c6ff, #0072ff);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -68,7 +45,6 @@ html, body, .stApp {
     grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
     gap: 1.6rem;
     padding: 1rem;
-    width: 100%;
     justify-items: center;
 }
 
@@ -77,7 +53,7 @@ html, body, .stApp {
     background: rgba(255,255,255,0.08);
     border-radius: 18px;
     padding: 1.3rem 1rem;
-    width: 90%;
+    width: 100%;
     max-width: 360px;
     text-align: center;
     box-shadow: 0 4px 14px rgba(0,0,0,0.25);
@@ -128,85 +104,72 @@ html, body, .stApp {
     line-height: 1.4;
 }
 
-/* Mobile adjustments */
+/* Mobile responsiveness */
+@viewport { width: device-width; zoom: 1.0; }
 @media (max-width: 600px) {
-    .title { font-size: 2rem; margin: 1.5rem 0 1rem 0; }
+    .title { font-size: 2rem; }
     .btn { font-size: 1rem; }
-}
-
-/* Smooth scroll & prevent white gaps */
-body {
-    overscroll-behavior: none;
-    background-attachment: fixed;
 }
 </style>
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-  // Animate cards when visible
   const cards = document.querySelectorAll('.card');
   const observer = new IntersectionObserver(entries => {
     entries.forEach(entry => {
-      if (entry.isIntersecting) entry.target.classList.add('visible');
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
     });
   }, { threshold: 0.1 });
-  cards.forEach(card => observer.observe(card));
 
-  // Auto-fit iframe height to content for Streamlit embedding
-  const resize = () => {
-    const height = document.body.scrollHeight;
-    window.parent.postMessage({ streamlitResizeFrame: height }, "*");
-  };
-  resize();
-  new ResizeObserver(resize).observe(document.body);
+  cards.forEach(card => observer.observe(card));
 });
 </script>
 """
 
+# ---- HTML Layout ----
 page_html = """
-<div class="fullscreen">
-  <div class="title">🌐 Explore AI</div>
+<div class="title">🌐 Explore AI</div>
 
-  <div class="tools">
+<div class="tools">
 
-    <div class="card">
-      <a href="https://exploreai.streamlit.app/audiostory" target="_blank" class="btn audio-story">
-        🎧 <span>AUDIO STORY</span>
-      </a>
-      <div class="desc">Generate immersive, AI-narrated stories with dynamic voices and emotions.</div>
-    </div>
-
-    <div class="card">
-      <a href="https://exploreai.streamlit.app/text2audio" target="_blank" class="btn text2audio">
-        🗣️ <span>TEXT 2 AUDIO</span>
-      </a>
-      <div class="desc">Convert written text into natural-sounding speech in seconds.</div>
-    </div>
-
-    <div class="card">
-      <a href="https://exploreai.streamlit.app/singify" target="_blank" class="btn singify">
-        🎵 <span>SINGIFY</span>
-      </a>
-      <div class="desc">Turn any text or lyrics into melodic AI-generated singing voices.</div>
-    </div>
-
-    <div class="card">
-      <a href="https://exploreai.streamlit.app/aipodcast" target="_blank" class="btn aipodcast">
-        🎙️ <span>AI PODCAST</span>
-      </a>
-      <div class="desc">Create podcast-style conversations between realistic AI voices.</div>
-    </div>
-
-    <div class="card">
-      <a href="https://csvvisualisation.streamlit.app" target="_blank" class="btn csv">
-        📊 <span>CSV ANALYSIS</span>
-      </a>
-      <div class="desc">Upload and visualize CSV files with intelligent insights and charts.</div>
-    </div>
-
+  <div class="card">
+    <a href="https://exploreai.streamlit.app/audiostory" target="_blank" class="btn audio-story">
+      🎧 <span>AUDIO STORY</span>
+    </a>
+    <div class="desc">Generate immersive, AI-narrated stories with dynamic voices and emotions.</div>
   </div>
+
+  <div class="card">
+    <a href="https://exploreai.streamlit.app/text2audio" target="_blank" class="btn text2audio">
+      🗣️ <span>TEXT 2 AUDIO</span>
+    </a>
+    <div class="desc">Convert written text into natural-sounding speech in seconds.</div>
+  </div>
+
+  <div class="card">
+    <a href="https://exploreai.streamlit.app/singify" target="_blank" class="btn singify">
+      🎵 <span>SINGIFY</span>
+    </a>
+    <div class="desc">Turn any text or lyrics into melodic AI-generated singing voices.</div>
+  </div>
+
+  <div class="card">
+    <a href="https://exploreai.streamlit.app/aipodcast" target="_blank" class="btn aipodcast">
+      🎙️ <span>AI PODCAST</span>
+    </a>
+    <div class="desc">Create podcast-style conversations between realistic AI voices.</div>
+  </div>
+
+  <div class="card">
+    <a href="https://csvvisualisation.streamlit.app" target="_blank" class="btn csv">
+      📊 <span>CSV ANALYSIS</span>
+    </a>
+    <div class="desc">Upload and visualize CSV files with intelligent insights and charts.</div>
+  </div>
+
 </div>
 """
 
-# Automatically fit iframe height — no fixed value
-html(page_css + page_html, height=None, scrolling=False)
+html(page_css + page_html, height=1200, scrolling=True)
