@@ -18,14 +18,30 @@ hide_ui = """
 """
 st.markdown(hide_ui, unsafe_allow_html=True)
 
-# ---- Animated CSS + HTML ----
+# ---- CSS + HTML ----
 page_css = """
 <style>
-body, .stApp {
+html, body, .stApp {
+    height: 100%;
+    margin: 0;
+    padding: 0;
     background: linear-gradient(135deg, #1e3c72, #2a5298);
-    color: white;
     font-family: 'Poppins', sans-serif;
     overflow-x: hidden;
+}
+
+/* Remove Streamlit padding */
+section.main > div {
+    padding-top: 0rem !important;
+    padding-bottom: 0rem !important;
+}
+
+/* Wrapper ensures tight layout */
+.wrapper {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
 }
 
 /* Title */
@@ -33,7 +49,7 @@ body, .stApp {
     text-align: center;
     font-size: 2.5rem;
     font-weight: 800;
-    margin-bottom: 1.5rem;
+    margin: 2rem 0 1.5rem 0;
     background: linear-gradient(90deg, #00c6ff, #0072ff);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -104,72 +120,85 @@ body, .stApp {
     line-height: 1.4;
 }
 
-/* Mobile responsiveness */
-@viewport { width: device-width; zoom: 1.0; }
+/* Prevent white/blue gaps */
+body {
+    background-attachment: fixed;
+    overscroll-behavior: none;
+}
+
+/* Mobile adjustments */
 @media (max-width: 600px) {
-    .title { font-size: 2rem; }
+    .title { font-size: 2rem; margin: 1.5rem 0 1rem 0; }
     .btn { font-size: 1rem; }
+    .tools { padding-bottom: 1.5rem; }
 }
 </style>
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {
+  // Animate cards on view
   const cards = document.querySelectorAll('.card');
   const observer = new IntersectionObserver(entries => {
     entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add('visible');
-      }
+      if (entry.isIntersecting) entry.target.classList.add('visible');
     });
   }, { threshold: 0.1 });
-
   cards.forEach(card => observer.observe(card));
+
+  // Auto-resize parent iframe to fit content (fix white/blue gaps)
+  const resizeObserver = new ResizeObserver(() => {
+    const height = document.body.scrollHeight;
+    window.parent.postMessage({ streamlitResizeFrame: height }, "*");
+  });
+  resizeObserver.observe(document.body);
 });
 </script>
 """
 
-# ---- HTML Layout ----
 page_html = """
-<div class="title">🌐 Explore AI</div>
+<div class="wrapper">
+  <div class="title">🌐 Explore AI</div>
 
-<div class="tools">
+  <div class="tools">
 
-  <div class="card">
-    <a href="https://exploreai.streamlit.app/audiostory" target="_blank" class="btn audio-story">
-      🎧 <span>AUDIO STORY</span>
-    </a>
-    <div class="desc">Generate immersive, AI-narrated stories with dynamic voices and emotions.</div>
+    <div class="card">
+      <a href="https://exploreai.streamlit.app/audiostory" target="_blank" class="btn audio-story">
+        🎧 <span>AUDIO STORY</span>
+      </a>
+      <div class="desc">Generate immersive, AI-narrated stories with dynamic voices and emotions.</div>
+    </div>
+
+    <div class="card">
+      <a href="https://exploreai.streamlit.app/text2audio" target="_blank" class="btn text2audio">
+        🗣️ <span>TEXT 2 AUDIO</span>
+      </a>
+      <div class="desc">Convert written text into natural-sounding speech in seconds.</div>
+    </div>
+
+    <div class="card">
+      <a href="https://exploreai.streamlit.app/singify" target="_blank" class="btn singify">
+        🎵 <span>SINGIFY</span>
+      </a>
+      <div class="desc">Turn any text or lyrics into melodic AI-generated singing voices.</div>
+    </div>
+
+    <div class="card">
+      <a href="https://exploreai.streamlit.app/aipodcast" target="_blank" class="btn aipodcast">
+        🎙️ <span>AI PODCAST</span>
+      </a>
+      <div class="desc">Create podcast-style conversations between realistic AI voices.</div>
+    </div>
+
+    <div class="card">
+      <a href="https://csvvisualisation.streamlit.app" target="_blank" class="btn csv">
+        📊 <span>CSV ANALYSIS</span>
+      </a>
+      <div class="desc">Upload and visualize CSV files with intelligent insights and charts.</div>
+    </div>
+
   </div>
-
-  <div class="card">
-    <a href="https://exploreai.streamlit.app/text2audio" target="_blank" class="btn text2audio">
-      🗣️ <span>TEXT 2 AUDIO</span>
-    </a>
-    <div class="desc">Convert written text into natural-sounding speech in seconds.</div>
-  </div>
-
-  <div class="card">
-    <a href="https://exploreai.streamlit.app/singify" target="_blank" class="btn singify">
-      🎵 <span>SINGIFY</span>
-    </a>
-    <div class="desc">Turn any text or lyrics into melodic AI-generated singing voices.</div>
-  </div>
-
-  <div class="card">
-    <a href="https://exploreai.streamlit.app/aipodcast" target="_blank" class="btn aipodcast">
-      🎙️ <span>AI PODCAST</span>
-    </a>
-    <div class="desc">Create podcast-style conversations between realistic AI voices.</div>
-  </div>
-
-  <div class="card">
-    <a href="https://csvvisualisation.streamlit.app" target="_blank" class="btn csv">
-      📊 <span>CSV ANALYSIS</span>
-    </a>
-    <div class="desc">Upload and visualize CSV files with intelligent insights and charts.</div>
-  </div>
-
 </div>
 """
 
-html(page_css + page_html, height=1200, scrolling=True)
+# Note: height=None + scrolling=False lets iframe auto-adjust dynamically
+html(page_css + page_html, height=None, scrolling=False)
