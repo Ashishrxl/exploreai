@@ -9,11 +9,15 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ---- Hide Streamlit Branding ----
+# ---- Hide Streamlit Branding & Padding ----
 hide_ui = """
 <style>
 #MainMenu, footer, header {visibility: hidden;}
 [data-testid="stToolbar"], [data-testid="stStatusWidget"] {display: none !important;}
+[data-testid="stAppViewContainer"], [data-testid="stVerticalBlock"] {
+    padding: 0 !important;
+    margin: 0 !important;
+}
 </style>
 """
 st.markdown(hide_ui, unsafe_allow_html=True)
@@ -23,28 +27,28 @@ page_css = """
 <style>
 html, body, .stApp {
     height: 100%;
-    width: 100%;
     margin: 0;
     padding: 0;
+    width: 100%;
     background: linear-gradient(135deg, #1e3c72, #2a5298);
     font-family: 'Poppins', sans-serif;
+    overflow: hidden;
+}
+
+/* Fullscreen section with scroll */
+.fullscreen {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow-y: auto;
     overflow-x: hidden;
-}
-
-/* Remove Streamlit padding */
-section.main > div {
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
-}
-
-/* Wrapper fills screen height */
-.wrapper {
-    min-height: 100vh;
+    -webkit-overflow-scrolling: touch;
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
     display: flex;
     flex-direction: column;
-    justify-content: center; /* centers vertically */
     align-items: center;
-    box-sizing: border-box;
+    justify-content: flex-start;
 }
 
 /* Title */
@@ -64,6 +68,7 @@ section.main > div {
     grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
     gap: 1.6rem;
     padding: 1rem;
+    width: 100%;
     justify-items: center;
 }
 
@@ -72,7 +77,7 @@ section.main > div {
     background: rgba(255,255,255,0.08);
     border-radius: 18px;
     padding: 1.3rem 1rem;
-    width: 100%;
+    width: 90%;
     max-width: 360px;
     text-align: center;
     box-shadow: 0 4px 14px rgba(0,0,0,0.25);
@@ -123,26 +128,22 @@ section.main > div {
     line-height: 1.4;
 }
 
-/* Force background fill */
-body {
-    min-height: 100vh;
-    background-attachment: fixed;
-    background-repeat: no-repeat;
-    background-size: cover;
-    overscroll-behavior: none;
-}
-
-/* Mobile tweaks */
+/* Mobile adjustments */
 @media (max-width: 600px) {
     .title { font-size: 2rem; margin: 1.5rem 0 1rem 0; }
     .btn { font-size: 1rem; }
-    .tools { padding-bottom: 1.5rem; }
+}
+
+/* Smooth scroll & prevent white gaps */
+body {
+    overscroll-behavior: none;
+    background-attachment: fixed;
 }
 </style>
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-  // Animate cards
+  // Animate cards when visible
   const cards = document.querySelectorAll('.card');
   const observer = new IntersectionObserver(entries => {
     entries.forEach(entry => {
@@ -151,18 +152,19 @@ document.addEventListener("DOMContentLoaded", function() {
   }, { threshold: 0.1 });
   cards.forEach(card => observer.observe(card));
 
-  // Resize Streamlit frame height dynamically
-  const resizeObserver = new ResizeObserver(() => {
-    const height = Math.max(document.body.scrollHeight, window.innerHeight);
+  // Auto-fit iframe height to content for Streamlit embedding
+  const resize = () => {
+    const height = document.body.scrollHeight;
     window.parent.postMessage({ streamlitResizeFrame: height }, "*");
-  });
-  resizeObserver.observe(document.body);
+  };
+  resize();
+  new ResizeObserver(resize).observe(document.body);
 });
 </script>
 """
 
 page_html = """
-<div class="wrapper">
+<div class="fullscreen">
   <div class="title">🌐 Explore AI</div>
 
   <div class="tools">
@@ -206,5 +208,5 @@ page_html = """
 </div>
 """
 
-# Dynamic full-height layout (no fixed height)
+# Automatically fit iframe height — no fixed value
 html(page_css + page_html, height=None, scrolling=False)
