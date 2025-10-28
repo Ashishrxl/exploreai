@@ -43,7 +43,7 @@ body, .stApp {
 .tools {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
-    gap: 4.6rem;
+    gap: 5.6rem;
     padding: 1rem;
     justify-items: center;
 }
