@@ -253,7 +253,7 @@ def main():
 
     col1, col2 = st.columns([1, 1])
 
-    with col1:
+    with col2:
         st.header("📝 Input Text")
 
         input_tab1, input_tab2 = st.tabs(["📁 Upload File", "✍️ Type Text"])
@@ -366,7 +366,7 @@ def main():
                     st.session_state.current_typed_text = ""
                     st.rerun()
 
-    with col2:
+    with col1:
         st.header("🔊 Generate Audio")
 
         # Check if text is confirmed before allowing audio generation
