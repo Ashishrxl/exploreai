@@ -4,6 +4,7 @@ from google.genai import types
 import wave
 from io import BytesIO
 import time
+import base64
 from streamlit.components.v1 import html
 
 # Hide Streamlit default elements
@@ -26,10 +27,7 @@ disable_footer_click = """
 """
 st.markdown(disable_footer_click, unsafe_allow_html=True)
 
-st.set_page_config(
-    page_title="🎙️ Text 2 Audio",
-    layout="wide"
-)
+st.set_page_config(page_title="🎙️ Text 2 Audio", layout="wide")
 
 # CSS to hide unwanted elements
 hide_streamlit_style = """
@@ -74,7 +72,7 @@ header > div:nth-child(2) { display: none; }
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# Initialize session state variables
+# Initialize session state
 if 'audio_generated' not in st.session_state:
     st.session_state.audio_generated = False
 if 'audio_buffer' not in st.session_state:
@@ -98,7 +96,7 @@ if 'typed_text_temp' not in st.session_state:
 if 'current_typed_text' not in st.session_state:
     st.session_state.current_typed_text = ""
 
-# Helper function: save PCM data as WAV in an in-memory buffer
+# Helper: Save PCM as WAV
 def save_wave_file(pcm_data, channels=1, rate=24000, sample_width=2):
     buffer = BytesIO()
     with wave.open(buffer, "wb") as wf:
@@ -109,77 +107,50 @@ def save_wave_file(pcm_data, channels=1, rate=24000, sample_width=2):
     buffer.seek(0)
     return buffer
 
-# Extract text depending on uploaded file type
+# Extract text from uploaded file
 def extract_text_from_file(uploaded_file):
     file_type = uploaded_file.name.split('.')[-1].lower()
-
     try:
         if file_type == 'txt':
-            text = uploaded_file.read().decode('utf-8')
-            return text
-
+            return uploaded_file.read().decode('utf-8')
         elif file_type == 'pdf':
             import PyPDF2
-            from io import BytesIO
-
             pdf_reader = PyPDF2.PdfReader(BytesIO(uploaded_file.read()))
-            text = ""
-            for page in pdf_reader.pages:
-                text += page.extract_text() + " "
-            return text
-
+            return " ".join(page.extract_text() for page in pdf_reader.pages)
         elif file_type in ['doc', 'docx']:
             import docx
-            from io import BytesIO
-
             doc = docx.Document(BytesIO(uploaded_file.read()))
-            text = ""
-            for paragraph in doc.paragraphs:
-                text += paragraph.text + " "
-            return text
-
+            return " ".join(p.text for p in doc.paragraphs)
         else:
             st.error(f"Unsupported file format: {file_type}")
             return None
-
     except Exception as e:
         st.error(f"Error processing file: {str(e)}")
         return None
 
-# Summarize text using Gemini API
+# Summarize text using Gemini
 def summarize_text(text, api_key, max_words=3500):
-    """
-    Summarize long text to fit within TTS token limits
-    """
     try:
         client = genai.Client(api_key=api_key)
+        prompt = f"""Please provide a comprehensive summary of the following text.
+Keep it under {max_words} words.
 
-        prompt = f"""Please provide a comprehensive summary of the following text. 
-Capture all key points, main ideas, and important details while keeping the summary under {max_words} words.
-Maintain the flow and context of the original content.
-
-TEXT TO SUMMARIZE:
+TEXT:
 {text}
-
 SUMMARY:"""
-
         response = client.models.generate_content(
-            model="gemini-2.0-flash-exp",  # or "gemini-1.5-pro" or "gemini-1.5-flash"
+            model="gemini-2.0-flash-exp",
             contents=prompt
         )
-
-        summary = response.text
-        return summary
-
+        return response.text
     except Exception as e:
         st.error(f"Error during summarization: {str(e)}")
         return None
 
-# Generate audio from text using Gemini 2.5 Flash TTS
+# ✅ Fixed generate_audio_tts() – handles bytes and Base64 correctly
 def generate_audio_tts(text, api_key, voice_name='Kore', speaking_style=''):
     try:
         client = genai.Client(api_key=api_key)
-
         prompt = f"{speaking_style}: {text}" if speaking_style else text
 
         response = client.models.generate_content(
@@ -197,8 +168,34 @@ def generate_audio_tts(text, api_key, voice_name='Kore', speaking_style=''):
             )
         )
 
-        audio_data = response.candidates[0].content.parts[0].inline_data.data
-        return audio_data
+        # Safe handling and decoding
+        if (
+            hasattr(response, "candidates")
+            and response.candidates
+            and hasattr(response.candidates[0], "content")
+            and response.candidates[0].content
+            and response.candidates[0].content.parts
+        ):
+            audio_part = response.candidates[0].content.parts[0]
+            if hasattr(audio_part, "inline_data") and audio_part.inline_data.data:
+                b64_data = audio_part.inline_data.data
+
+                # Handle both bytes and str
+                if isinstance(b64_data, bytes):
+                    audio_data = b64_data
+                elif isinstance(b64_data, str):
+                    missing_padding = len(b64_data) % 4
+                    if missing_padding:
+                        b64_data += "=" * (4 - missing_padding)
+                    audio_data = base64.b64decode(b64_data)
+                else:
+                    st.error("Unexpected audio data format from API.")
+                    return None
+
+                return audio_data
+
+        st.error("❌ No audio data returned from Gemini TTS. Check your API key or text.")
+        return None
 
     except Exception as e:
         st.error(f"Error generating audio: {str(e)}")
@@ -206,16 +203,14 @@ def generate_audio_tts(text, api_key, voice_name='Kore', speaking_style=''):
 
 def main():
     st.title("🎙️ Text-to-Audio Converter")
-    st.markdown("### Convert your text files to natural-sound")
+    st.markdown("### Convert your text files to natural-sounding speech")
     st.markdown("---")
 
-    # Configuration constants
-    MAX_WORDS_FOR_TTS = 4000  # Safe limit for TTS without hitting quota
+    MAX_WORDS_FOR_TTS = 4000
 
-    # Sidebar for configuration
+    # Sidebar settings
     with st.expander("⚙️ Settings", expanded=False):
         st.header("Configuration")
-
         api_key = st.secrets["GOOGLE_API_KEY"]
 
         st.markdown("---")
@@ -232,256 +227,93 @@ def main():
             'Callirrhoe': 'Easy-going and relaxed',
             'Autonoe': 'Bright and articulate'
         }
-
-        selected_voice = st.selectbox(
-            "Select Voice",
-            options=list(voice_options.keys()),
-            format_func=lambda x: f"{x} - {voice_options[x]}"
-        )
+        selected_voice = st.selectbox("Select Voice", options=list(voice_options.keys()),
+                                      format_func=lambda x: f"{x} - {voice_options[x]}")
 
         st.subheader("🎭 Speaking Style")
-        speaking_style = st.text_input(
-            "Optional: Describe how to speak",
-            placeholder="e.g., Say cheerfully, Speak in a calm voice",
-            help="Leave empty for natural speech"
-        )
+        speaking_style = st.text_input("Optional: Describe speaking tone",
+                                       placeholder="e.g., Calm and confident")
 
-        st.markdown("---")
-        st.info("💡 **Supported file formats:** TXT, PDF, DOCX")
-        st.info(f"📊 **Word limit for direct conversion:** {MAX_WORDS_FOR_TTS} words")
-        st.info("🤖 **Auto-summarization:** Texts longer than the limit will be automatically summarized")
+        st.info("💡 Supported: TXT, PDF, DOCX\n🤖 Auto-summarization for long texts")
 
     col1, col2 = st.columns([1, 1])
 
+    # Left column: input
     with col1:
         st.header("📝 Input Text")
+        tab1, tab2 = st.tabs(["📁 Upload File", "✍️ Type Text"])
 
-        input_tab1, input_tab2 = st.tabs(["📁 Upload File", "✍️ Type Text"])
+        with tab1:
+            uploaded = st.file_uploader("Upload text file", type=["txt", "pdf", "docx", "doc"])
+            if uploaded:
+                with st.spinner("Extracting text..."):
+                    extracted = extract_text_from_file(uploaded)
+                if extracted:
+                    st.session_state.input_text = extracted
+                    st.session_state.text_confirmed = True
+                    st.text_area("Extracted Text", extracted[:2000], height=300, disabled=True)
+                    count = len(extracted.split())
+                    st.caption(f"📊 Word count: {count}")
+                    if count > MAX_WORDS_FOR_TTS:
+                        st.warning(f"⚠️ Text exceeds {MAX_WORDS_FOR_TTS} words — will summarize automatically.")
 
-        with input_tab1:
-            uploaded_file = st.file_uploader(
-                "Upload your text file",
-                type=['txt', 'pdf', 'docx', 'doc'],
-                help="Upload a text file to convert to audio"
-            )
-
-            if uploaded_file is not None:
-                st.success(f"✅ File uploaded: {uploaded_file.name}")
-
-                with st.spinner("Extracting text from file..."):
-                    extracted_text = extract_text_from_file(uploaded_file)
-
-                if extracted_text:
-                    st.session_state.input_text = extracted_text
-                    st.session_state.text_confirmed = True  # Auto-confirm for file uploads
-
-                    st.text_area(
-                        "Extracted Text",
-                        value=extracted_text,
-                        height=300,
-                        key="extracted_display",
-                        disabled=True
-                    )
-
-                    word_count = len(extracted_text.split())
-                    st.caption(f"📊 Word count: {word_count} words")
-
-                    if word_count > MAX_WORDS_FOR_TTS:
-                        st.markdown(
-                            f'<div class="warning-box">⚠️ Text exceeds {MAX_WORDS_FOR_TTS} words. '
-                            f'It will be automatically summarized before audio conversion.</div>',
-                            unsafe_allow_html=True
-                        )
-
-        with input_tab2:
-            # Display confirmed text or text area
-            if st.session_state.text_confirmed and st.session_state.input_text and not uploaded_file:
-                confirmed_word_count = len(st.session_state.input_text.split())
-                st.markdown(
-                    f'<div class="info-box">✅ Text confirmed ({confirmed_word_count} words). '
-                    f'Ready to generate audio! ➡️</div>',
-                    unsafe_allow_html=True
-                )
-
-                # Show word count warning if needed
-                if confirmed_word_count > MAX_WORDS_FOR_TTS:
-                    st.markdown(
-                        f'<div class="warning-box">⚠️ Text exceeds {MAX_WORDS_FOR_TTS} words. '
-                        f'It will be automatically summarized before audio conversion.</div>',
-                        unsafe_allow_html=True
-                    )
-
-                # Show preview of confirmed text
-                st.text_area(
-                    "Confirmed Text (preview)",
-                    value=st.session_state.input_text[:500] + ("..." if len(st.session_state.input_text) > 500 else ""),
-                    height=150,
-                    disabled=True,
-                    key="confirmed_text_preview"
-                )
-
-                if st.button("🔄 Edit/Change Text", type="secondary", key="edit_text_btn"):
+        with tab2:
+            if st.session_state.text_confirmed and st.session_state.input_text and not uploaded:
+                wc = len(st.session_state.input_text.split())
+                st.success(f"✅ Text confirmed ({wc} words)")
+                st.text_area("Confirmed Text", st.session_state.input_text[:500], height=150, disabled=True)
+                if st.button("🔄 Edit Text"):
                     st.session_state.text_confirmed = False
-                    st.session_state.typed_text_temp = st.session_state.input_text
-                    st.session_state.audio_generated = False
+                    st.session_state.input_text = ""
                     st.rerun()
             else:
-                # Use form for better mobile experience - immediate button response
-                with st.form(key="text_input_form", clear_on_submit=False):
-                    typed_text = st.text_area(
-                        "Type or paste your text here",
-                        height=300,
-                        placeholder="Enter the text you want to convert to audio...",
-                        value=st.session_state.typed_text_temp,
-                        key="typed_input_form_area"
-                    )
-
-                    # Form buttons - these respond immediately
-                    col_btn1, col_btn2 = st.columns([1, 1])
-
-                    with col_btn1:
-                        submit_button = st.form_submit_button("✅ Proceed with This Text", type="primary")
-
-                    with col_btn2:
-                        clear_button = st.form_submit_button("🔄 Clear Text", type="secondary")
-
-                # Handle form submission
-                if submit_button:
-                    if typed_text and len(typed_text.strip()) > 0:
-                        st.session_state.input_text = typed_text
+                with st.form("text_form"):
+                    text_input = st.text_area("Type or paste your text here", height=300)
+                    submitted = st.form_submit_button("✅ Proceed")
+                if submitted:
+                    if text_input.strip():
+                        st.session_state.input_text = text_input
                         st.session_state.text_confirmed = True
-                        st.session_state.audio_generated = False  # Reset audio if new text
-                        st.session_state.typed_text_temp = ""
-                        st.session_state.current_typed_text = ""
-                        st.success("✅ Text confirmed! You can now generate audio.")
+                        st.success("Text confirmed! Now generate audio ➡️")
                         st.rerun()
                     else:
-                        st.warning("⚠️ Please enter some text before proceeding.")
+                        st.warning("Please enter some text.")
 
-                if clear_button:
-                    st.session_state.input_text = ""
-                    st.session_state.text_confirmed = False
-                    st.session_state.audio_generated = False
-                    st.session_state.typed_text_temp = ""
-                    st.session_state.current_typed_text = ""
-                    st.rerun()
-
+    # Right column: output
     with col2:
         st.header("🔊 Generate Audio")
-
-        # Check if text is confirmed before allowing audio generation
         if api_key and st.session_state.text_confirmed and st.session_state.input_text:
-            input_text = st.session_state.input_text
-            word_count = len(input_text.split())
+            txt = st.session_state.input_text
+            wc = len(txt.split())
+            needs_summary = wc > MAX_WORDS_FOR_TTS
 
-            # Determine if summarization is needed
-            needs_summarization = word_count > MAX_WORDS_FOR_TTS
-
-            if needs_summarization and not st.session_state.audio_generated:
-                st.info(f"📝 Original text: {word_count} words " f"🤖 Will be summarized to ~{MAX_WORDS_FOR_TTS} words before conversion")
-
-            if st.button("🎵 Convert to Audio", type="primary", key="convert_audio_btn"):
-                use_text = input_text
-
-                # Reset audio generated state
-                st.session_state.audio_generated = False
-                st.session_state.was_summarized = False
-
-                # Summarize if needed
-                if needs_summarization:
-                    st.markdown("### 🤖 Step 1: Summarizing Text")
-                    with st.spinner("Summarizing long text to fit TTS limits... This may take a moment."):
-                        summary = summarize_text(input_text, api_key=api_key, max_words=MAX_WORDS_FOR_TTS)
-
+            if st.button("🎵 Convert to Audio"):
+                use_text = txt
+                if needs_summary:
+                    with st.spinner("Summarizing text..."):
+                        summary = summarize_text(txt, api_key, max_words=MAX_WORDS_FOR_TTS)
                     if summary:
-                        summary_word_count = len(summary.split())
-                        st.success(f"✅ Summarization complete! Reduced from {word_count} to {summary_word_count} words")
-
-                        # Store summary in session state
                         st.session_state.summary_text = summary
-                        st.session_state.original_word_count = word_count
                         st.session_state.was_summarized = True
-
                         use_text = summary
+                        st.success("Summarization complete.")
                     else:
-                        st.error("❌ Failed to summarize text. Please try with shorter text")
+                        st.error("Summarization failed.")
                         use_text = None
 
-                # Generate audio if we have valid text
                 if use_text:
-                    st.markdown("### 🎙️ Step 2: Generating Audio" if needs_summarization else "### 🎙️ Generating Audio")
-                    with st.spinner("Converting text to audio... This may take a moment."):
-                        audio_data = generate_audio_tts(
-                            text=use_text,
-                            api_key=api_key,
-                            voice_name=selected_voice,
-                            speaking_style=speaking_style
-                        )
-
+                    with st.spinner("Generating audio..."):
+                        audio_data = generate_audio_tts(use_text, api_key, selected_voice, speaking_style)
                     if audio_data:
-                        audio_buffer = save_wave_file(audio_data)
-
-                        # Store in session state
-                        st.session_state.audio_buffer = audio_buffer
+                        audio_buf = save_wave_file(audio_data)
                         st.session_state.audio_generated = True
-                        st.session_state.final_word_count = len(use_text.split())
-                        st.session_state.selected_voice_used = selected_voice
-
-            # Display generated audio (persists after download button click)
-            if st.session_state.audio_generated and st.session_state.audio_buffer:
-                st.markdown('<div class="success-box">✅ Audio generated successfully!</div>', unsafe_allow_html=True)
-
-                # Show summary if it was created
-                if st.session_state.was_summarized and st.session_state.summary_text:
-                    with st.expander("📄 View Summarized Text", expanded=False):
-                        st.text_area(
-                            "Summary",
-                            value=st.session_state.summary_text,
-                            height=200,
-                            disabled=True,
-                            key="summary_display_persist"
-                        )
-
-                # Reset buffer position to beginning for audio player
-                st.session_state.audio_buffer.seek(0)
-                st.audio(st.session_state.audio_buffer, format='audio/wav')
-
-                timestamp = time.strftime("%Y%m%d-%H%M%S")
-                filename = f"audio_output_{timestamp}.wav"
-
-                # Reset buffer position again for download
-                st.session_state.audio_buffer.seek(0)
-                st.download_button(
-                    label="⬇️ Download Audio File",
-                    data=st.session_state.audio_buffer,
-                    file_name=filename,
-                    mime="audio/wav",
-                    key="download_audio_btn"
-                )
-
-                st.info(f"🎵 Voice: {st.session_state.selected_voice_used} | 📝 Words converted: {st.session_state.final_word_count}")
-
-                if st.session_state.was_summarized:
-                    st.caption(f"ℹ️ Original text ({st.session_state.original_word_count} words) was summarized for audio conversion")
-
-                # Add a button to clear and generate new audio
-                if st.button("🔄 Generate New Audio", type="secondary", key="new_audio_btn"):
-                    st.session_state.audio_generated = False
-                    st.session_state.audio_buffer = None
-                    st.session_state.summary_text = None
-                    st.session_state.was_summarized = False
-                    st.session_state.text_confirmed = False
-                    st.session_state.input_text = ""
-                    st.session_state.typed_text_temp = ""
-                    st.session_state.current_typed_text = ""
-                    st.rerun()
-
+                        st.session_state.audio_buffer = audio_buf
+                        st.audio(audio_buf, format="audio/wav")
+                        ts = time.strftime("%Y%m%d-%H%M%S")
+                        st.download_button("⬇️ Download Audio", data=audio_buf,
+                                           file_name=f"audio_{ts}.wav", mime="audio/wav")
         else:
-            st.info("👈 Please provide:")
-            if not api_key:
-                st.warning("🔑 API key not found")
-            if not st.session_state.text_confirmed or not st.session_state.input_text:
-                st.warning("📝 Upload a file or type text and click '✅ Proceed with This Text'")
+            st.info("👈 Upload or type text and confirm before generating audio.")
 
 if __name__ == "__main__":
     main()
