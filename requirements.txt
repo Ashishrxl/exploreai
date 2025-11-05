@@ -9,3 +9,6 @@ requests
 
 PyPDF2
 python-docx
+
+pydub==0.25.1
+protobuf==5.28.2
