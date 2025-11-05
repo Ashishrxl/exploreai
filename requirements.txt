@@ -10,6 +10,10 @@ requests
 PyPDF2
 python-docx
 
+
+streamlit-webrtc==0.47.7
 pydub==0.25.1
-protobuf==5.28.2
-pyaudio>=0.2.13
+matplotlib==3.9.2
+protobuf==5.28.3
+av==12.3.0
+wave==0.0.2
