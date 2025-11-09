@@ -188,6 +188,14 @@ page_html = """
     <div class="desc">Upload and visualize CSV files with intelligent insights and charts.</div>
   </div>
 
+  <div class="card">
+    <a href="https://exploreai.streamlit.app/singperfect" target="_blank" class="btn csv">
+      📊 <span>SINGING COACH</span>
+    </a>
+    <div class="desc">Record your voice and get instant feedback.</div>
+
+  </div>
+
 </div>
 """
 
