@@ -190,7 +190,7 @@ page_html = """
 
   <div class="card">
     <a href="https://exploreai.streamlit.app/singperfect" target="_blank" class="btn singify">
-      📊 <span>SINGING COACH</span>
+      🎙️ <span>SINGING COACH</span>
     </a>
     <div class="desc">Record your voice and get instant feedback.</div>
 
