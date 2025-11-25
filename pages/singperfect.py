@@ -11,6 +11,7 @@ import wave
 import base64
 import os
 from contextlib import contextmanager
+import io
 
 # ==============================
 # Hide Streamlit elements
@@ -100,13 +101,64 @@ def load_audio_energy(path):
         energies /= np.max(energies)
     return energies
 
-# WAV writer (your required style)
-def save_wave(path, pcm_bytes, sample_rate=44100):
+def write_raw_wav(path, pcm_bytes, sample_rate=24000, channels=1, sampwidth=2):
+    """Write raw PCM bytes into a WAV file with given params (16-bit default)."""
     with wave.open(path, "wb") as wf:
-        wf.setnchannels(1)        # mono
-        wf.setsampwidth(2)        # 16-bit PCM
-        wf.setframerate(sample_rate)
+        wf.setnchannels(int(channels))
+        wf.setsampwidth(int(sampwidth))
+        wf.setframerate(int(sample_rate))
         wf.writeframes(pcm_bytes)
+
+def save_tts_bytes(path, part, pcm_bytes):
+    """
+    Robustly save TTS bytes to a WAV file path.
+    - If bytes already look like a container (RIFF/WAV/OGG/MP3), save as-is.
+    - Else try AudioSegment.from_file (decoding).
+    - Else fallback to raw WAV with metadata if present on `part`.
+    """
+    # Ensure bytes
+    if isinstance(pcm_bytes, str):
+        pcm_bytes = base64.b64decode(pcm_bytes)
+
+    header = pcm_bytes[:12].lower()
+    # Common container headers
+    if header.startswith(b'riff') or header.startswith(b'riff') or header.startswith(b'oggs') or header.startswith(b'flaC'.lower()) or header[:3] == b'ID3' or header[:2] == b'\xff\xfb':
+        # Looks like a complete file (WAV/OGG/FLAC/MP3). Save and attempt to normalize to WAV using pydub.
+        try:
+            with open(path, "wb") as f:
+                f.write(pcm_bytes)
+            # Try to convert to WAV to be safe/playable by streamlit
+            try:
+                seg = AudioSegment.from_file(path)
+                seg.export(path, format="wav")
+                return
+            except Exception:
+                # If conversion fails, leaving saved bytes may still be playable
+                return
+        except Exception:
+            pass
+
+    # If here, bytes are likely raw PCM or container pydub couldn't detect.
+    # Try to use pydub to decode from bytes directly
+    try:
+        bio = io.BytesIO(pcm_bytes)
+        seg = AudioSegment.from_file(bio)  # let pydub/ffmpeg detect format
+        seg = seg.set_frame_rate(24000).set_channels(1).set_sample_width(2)  # normalize
+        seg.export(path, format="wav")
+        return
+    except Exception:
+        pass
+
+    # Final fallback: write raw PCM into WAV using metadata if available
+    sample_rate = getattr(part, "sample_rate_hz", None) or getattr(part, "sample_rate", None) or 24000
+    channels = getattr(part, "channels", None) or 1
+    sampwidth = getattr(part, "sample_width", None) or 2  # bytes (2 == 16-bit)
+    try:
+        write_raw_wav(path, pcm_bytes, sample_rate=sample_rate, channels=channels, sampwidth=sampwidth)
+    except Exception:
+        # Last resort: write bytes directly to file - might be playable depending on format
+        with open(path, "wb") as f:
+            f.write(pcm_bytes)
 
 # ==============================
 # Gemini client
@@ -164,7 +216,7 @@ if ref_file and not st.session_state.lyrics_text:
                 ]
             )
             st.session_state.lyrics_text = response.candidates[0].content.parts[0].text.strip()
-        except:
+        except Exception:
             st.session_state.lyrics_text = "Lyrics could not be extracted."
 
 # Karaoke section
@@ -174,7 +226,7 @@ if st.session_state.ref_tmp_path and st.session_state.lyrics_text:
     try:
         audio = AudioSegment.from_file(st.session_state.ref_tmp_path)
         duration = audio.duration_seconds
-    except:
+    except Exception:
         duration = 60
     timestamps = [round(i * (duration / len(lines)), 2) for i in range(len(lines))]
     lines_html = "".join([f'<p class="lyric-line" data-time="{timestamps[i]}">{lines[i]}</p>' for i in range(len(lines))])
@@ -277,13 +329,13 @@ if st.session_state.ref_tmp_path and recorded_file_path:
 
     try:
         feedback_text = response.candidates[0].content.parts[0].text
-    except:
+    except Exception:
         feedback_text = "No feedback generated."
 
     st.write(feedback_text)
 
     # ====================================
-    # UPDATED AUDIO FEEDBACK (your style)
+    # UPDATED AUDIO FEEDBACK (robust saving)
     # ====================================
     if enable_audio_feedback:
         with st.spinner("🔊 Generating spoken feedback..."):
@@ -308,13 +360,27 @@ if st.session_state.ref_tmp_path and recorded_file_path:
                     config=config
                 )
 
-                pcm_data = response.candidates[0].content.parts[0].inline_data.data
+                # Support both forms: inline_data.data or audio_data
+                part = response.candidates[0].content.parts[0]
+                pcm_data = None
+                if hasattr(part, "inline_data") and getattr(part.inline_data, "data", None) is not None:
+                    pcm_data = part.inline_data.data
+                elif hasattr(part, "audio_data") and getattr(part, "audio_data", None) is not None:
+                    pcm_data = part.audio_data
+                else:
+                    # try to find any attribute with bytes-like content
+                    for attr in ("data", "pcm", "bytes", "content"):
+                        v = getattr(part, attr, None)
+                        if v:
+                            pcm_data = v
+                            break
 
-                if isinstance(pcm_data, str):
-                    pcm_data = base64.b64decode(pcm_data)
+                if pcm_data is None:
+                    raise RuntimeError("No audio bytes found in TTS response.")
 
+                # Normalize to file: attempt robust saving/conversion
                 tts_path = tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name
-                save_wave(tts_path, pcm_data)
+                save_tts_bytes(tts_path, part, pcm_data)
 
                 st.audio(tts_path)
                 st.success("✅ Audio feedback ready!")
