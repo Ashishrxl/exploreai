@@ -100,6 +100,14 @@ def load_audio_energy(path):
         energies /= np.max(energies)
     return energies
 
+# WAV writer (your required style)
+def save_wave(path, pcm_bytes, sample_rate=44100):
+    with wave.open(path, "wb") as wf:
+        wf.setnchannels(1)        # mono
+        wf.setsampwidth(2)        # 16-bit PCM
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm_bytes)
+
 # ==============================
 # Gemini client
 # ==============================
@@ -125,6 +133,8 @@ with col2:
 
 voice_choice = st.selectbox("🎤 Choose AI voice", ["Kore", "Ava", "Wave"], index=0)
 
+def map_language_code(lang):
+    return "en-US" if lang == "English" else "hi-IN"
 
 # ==============================
 # Step 2: Upload Song
@@ -132,7 +142,6 @@ voice_choice = st.selectbox("🎤 Choose AI voice", ["Kore", "Ava", "Wave"], ind
 st.header("🎧 Step 2: Upload Reference Song")
 ref_file = st.file_uploader("Upload a song (mp3 or wav)", type=["mp3", "wav"])
 
-# Use session_state to avoid re-extraction
 if "lyrics_text" not in st.session_state:
     st.session_state.lyrics_text = ""
 if "ref_tmp_path" not in st.session_state:
@@ -155,18 +164,17 @@ if ref_file and not st.session_state.lyrics_text:
                 ]
             )
             st.session_state.lyrics_text = response.candidates[0].content.parts[0].text.strip()
-        except Exception:
+        except:
             st.session_state.lyrics_text = "Lyrics could not be extracted."
 
-# Show uploaded song + lyrics
+# Karaoke section
 if st.session_state.ref_tmp_path and st.session_state.lyrics_text:
     st.subheader("📜 Lyrics (Sing Along)")
-
     lines = [line.strip() for line in st.session_state.lyrics_text.split("\n") if line.strip()]
     try:
         audio = AudioSegment.from_file(st.session_state.ref_tmp_path)
         duration = audio.duration_seconds
-    except Exception:
+    except:
         duration = 60
     timestamps = [round(i * (duration / len(lines)), 2) for i in range(len(lines))]
     lines_html = "".join([f'<p class="lyric-line" data-time="{timestamps[i]}">{lines[i]}</p>' for i in range(len(lines))])
@@ -184,16 +192,15 @@ if st.session_state.ref_tmp_path and st.session_state.lyrics_text:
     const lines=Array.from(document.querySelectorAll('.lyric-line'));
     const times=lines.map(l=>parseFloat(l.dataset.time));
     let active=0;
-    function highlight(time){{
+    function highlight(t){{
         for(let i=0;i<lines.length;i++){{
-            if(time>=times[i]&&(i===lines.length-1||time<times[i+1])){{
+            if(t>=times[i]&&(i===lines.length-1||t<times[i+1])){{
                 if(active!==i){{
                     lines.forEach(l=>l.style.color='#444');
                     lines[i].style.color='#ff4081';
                     lines[i].scrollIntoView({{behavior:'smooth',block:'center'}});
                     active=i;
-                }}
-                break;
+                }} break;
             }}
         }}
     }}
@@ -207,7 +214,6 @@ if st.session_state.ref_tmp_path and st.session_state.lyrics_text:
 # Step 3: Record user singing
 # ==============================
 st.header("🎤 Step 3: Record Your Singing")
-
 recorded_audio_native = st.audio_input("🎙️ Record your voice", key="recorder")
 
 recorded_file_path = None
@@ -251,7 +257,11 @@ if st.session_state.ref_tmp_path and recorded_file_path:
         else "Provide feedback in Hindi using a natural tone."
     )
 
-    prompt = f"You are a professional vocal coach. Compare the user's singing to the reference and give supportive feedback about pitch, rhythm, tone, and expression. {lang_instruction}"
+    prompt = (
+        f"You are a professional vocal coach. Compare the user's singing to the "
+        f"reference and give supportive feedback about pitch, rhythm, tone, and expression. "
+        f"{lang_instruction}"
+    )
 
     with st.spinner("🎧 Generating feedback..."):
         response = client.models.generate_content(
@@ -260,49 +270,51 @@ if st.session_state.ref_tmp_path and recorded_file_path:
                 {"role": "user", "parts": [
                     {"text": prompt},
                     {"inline_data": {"mime_type": "audio/wav", "data": open(st.session_state.ref_tmp_path, "rb").read()}},
-                    {"inline_data": {"mime_type": "audio/wav", "data": open(recorded_file_path, "rb").read()}},
+                    {"inline_data": {"mime_type": "audio/wav", "data": open(recorded_file_path, "rb").read()}}
                 ]}
             ]
         )
 
     try:
         feedback_text = response.candidates[0].content.parts[0].text
-    except Exception:
+    except:
         feedback_text = "No feedback generated."
 
     st.write(feedback_text)
 
-    # ==============================
-    # FIXED AUDIO FEEDBACK SECTION
-    # ==============================
+    # ====================================
+    # UPDATED AUDIO FEEDBACK (your style)
+    # ====================================
     if enable_audio_feedback:
         with st.spinner("🔊 Generating spoken feedback..."):
             try:
-                tts = client.models.generate_content(
-                    model="gemini-2.5-flash-preview-tts",
-                    contents=f"Speak this feedback warmly: {feedback_text}",
-                    config=types.GenerateContentConfig(
-                        response_modalities=["AUDIO"],
-                        speech_config=types.SpeechConfig(
-                            voice_config=types.VoiceConfig(
-                                prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                                    voice_name=voice_choice
-                                )
+                contents = f"Speak this feedback warmly: {feedback_text}"
+
+                config = types.GenerateContentConfig(
+                    response_modalities=["AUDIO"],
+                    speech_config=types.SpeechConfig(
+                        language_code=map_language_code(feedback_lang),
+                        voice_config=types.VoiceConfig(
+                            prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                voice_name=voice_choice
                             )
                         )
-                    ),
+                    )
                 )
 
-                # 🔥 FIX: Correctly extract audio bytes
-                audio_part = next(
-                    p for p in tts.candidates[0].content.parts
-                    if hasattr(p, "audio_data")
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash-preview-tts",
+                    contents=contents,
+                    config=config
                 )
-                audio_data = audio_part.audio_data  # <-- Correct attribute
+
+                pcm_data = response.candidates[0].content.parts[0].inline_data.data
+
+                if isinstance(pcm_data, str):
+                    pcm_data = base64.b64decode(pcm_data)
 
                 tts_path = tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name
-                with open(tts_path, "wb") as f:
-                    f.write(audio_data)
+                save_wave(tts_path, pcm_data)
 
                 st.audio(tts_path)
                 st.success("✅ Audio feedback ready!")
