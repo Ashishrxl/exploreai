@@ -49,7 +49,10 @@ st.set_page_config(page_title="🎙️ AI Vocal Coach", layout="wide")
 # --- API Key selection ---
 api_keys = {
     "Key 1": st.secrets["KEY_1"],
-    "Key 2": st.secrets["KEY_2"], "Key 3": st.secrets["KEY_3"], "Key 4": st.secrets["KEY_4"], "Key 5": st.secrets["KEY_5"], "Key 6": st.secrets["KEY_6"], "Key 7": st.secrets["KEY_7"], "Key 8": st.secrets["KEY_8"], "Key 9": st.secrets["KEY_9"], "Key 10": st.secrets["KEY_10"], "Key 11": st.secrets["KEY_11"]
+    "Key 2": st.secrets["KEY_2"], "Key 3": st.secrets["KEY_3"], "Key 4": st.secrets["KEY_4"],
+    "Key 5": st.secrets["KEY_5"], "Key 6": st.secrets["KEY_6"], "Key 7": st.secrets["KEY_7"],
+    "Key 8": st.secrets["KEY_8"], "Key 9": st.secrets["KEY_9"], "Key 10": st.secrets["KEY_10"],
+    "Key 11": st.secrets["KEY_11"]
 }
 selected_key_name = st.selectbox("Select Key", list(api_keys.keys()))
 api_key = api_keys[selected_key_name]
@@ -109,6 +112,7 @@ if client is None:
     st.error("❌ Missing GOOGLE_API_KEY in secrets.")
     st.stop()
 
+
 # ==============================
 # Step 1: Feedback options
 # ==============================
@@ -120,6 +124,7 @@ with col2:
     enable_audio_feedback = st.checkbox("🔊 Generate Audio Feedback", value=False)
 
 voice_choice = st.selectbox("🎤 Choose AI voice", ["Kore", "Ava", "Wave"], index=0)
+
 
 # ==============================
 # Step 2: Upload Song
@@ -153,10 +158,9 @@ if ref_file and not st.session_state.lyrics_text:
         except Exception:
             st.session_state.lyrics_text = "Lyrics could not be extracted."
 
-# Show uploaded song + lyrics (once)
+# Show uploaded song + lyrics
 if st.session_state.ref_tmp_path and st.session_state.lyrics_text:
     st.subheader("📜 Lyrics (Sing Along)")
-    # st.audio(st.session_state.ref_tmp_path, format="audio/wav")
 
     lines = [line.strip() for line in st.session_state.lyrics_text.split("\n") if line.strip()]
     try:
@@ -166,6 +170,7 @@ if st.session_state.ref_tmp_path and st.session_state.lyrics_text:
         duration = 60
     timestamps = [round(i * (duration / len(lines)), 2) for i in range(len(lines))]
     lines_html = "".join([f'<p class="lyric-line" data-time="{timestamps[i]}">{lines[i]}</p>' for i in range(len(lines))])
+
     karaoke_html = f"""
     <div>
       <audio id="karaokePlayer" controls style="width:100%;">
@@ -197,6 +202,7 @@ if st.session_state.ref_tmp_path and st.session_state.lyrics_text:
     """
     html(karaoke_html, height=420)
 
+
 # ==============================
 # Step 3: Record user singing
 # ==============================
@@ -210,6 +216,7 @@ if recorded_audio_native:
     with open(recorded_file_path, "wb") as f:
         f.write(recorded_audio_native.getvalue())
     st.success("✅ Recording captured!")
+
 
 # ==============================
 # Step 4: Compare + Feedback
@@ -265,6 +272,9 @@ if st.session_state.ref_tmp_path and recorded_file_path:
 
     st.write(feedback_text)
 
+    # ==============================
+    # FIXED AUDIO FEEDBACK SECTION
+    # ==============================
     if enable_audio_feedback:
         with st.spinner("🔊 Generating spoken feedback..."):
             try:
@@ -275,19 +285,30 @@ if st.session_state.ref_tmp_path and recorded_file_path:
                         response_modalities=["AUDIO"],
                         speech_config=types.SpeechConfig(
                             voice_config=types.VoiceConfig(
-                                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice_choice)
+                                prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                    voice_name=voice_choice
+                                )
                             )
                         )
                     ),
                 )
-                audio_part = tts.candidates[0].content.parts[0]
-                audio_data = audio_part.inline_data.data
+
+                # 🔥 FIX: Correctly extract audio bytes
+                audio_part = next(
+                    p for p in tts.candidates[0].content.parts
+                    if hasattr(p, "audio_data")
+                )
+                audio_data = audio_part.audio_data  # <-- Correct attribute
+
                 tts_path = tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name
                 with open(tts_path, "wb") as f:
                     f.write(audio_data)
+
                 st.audio(tts_path)
                 st.success("✅ Audio feedback ready!")
+
             except Exception as e:
                 st.warning(f"⚠️ Audio feedback failed: {e}")
+
 else:
     st.info("Please upload a song and record your voice to continue.")
