@@ -45,6 +45,8 @@ st.set_page_config(page_title="Singify 🎶", layout="centered")
 st.title("🎤 Singify")
 st.caption("Record or upload a line → Transcribe....")
 
+sttmodel = "gemini-2.5-flash"
+
 # --- API Key selection ---
 api_keys = {
     "Key 1": st.secrets["KEY_1"],
@@ -345,7 +347,7 @@ async def transcribe_and_sing():
     progress_text.text("🔤 Transcribing...")
     try:
         resp = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model= sttmodel,
             contents=[
                 {"role": "user", "parts": [
                     {"text": "Please transcribe this speech accurately."},
