@@ -317,8 +317,7 @@ if st.session_state.ref_tmp_path and recorded_file_path:
 
     with st.spinner("🎧 Generating feedback..."):
         response = client.models.generate_content(
-            model="gemini-2.5-flash-lite
-",
+            model="gemini-2.5-flash-lite",
             contents=[
                 {"role": "user", "parts": [
                     {"text": prompt},
