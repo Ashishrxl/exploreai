@@ -207,8 +207,7 @@ if ref_file and not st.session_state.lyrics_text:
         st.session_state.ref_tmp_path = tmp_path
         try:
             response = client.models.generate_content(
-                model="gemini-2.5-flash-lite
-",
+                model="gemini-2.5-flash-lite",
                 contents=[
                     {"role": "user", "parts": [
                         {"text": "Extract the complete lyrics from this song and return only the text."},
