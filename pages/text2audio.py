@@ -72,6 +72,10 @@ header > div:nth-child(2) { display: none; }
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
+textmodel = "gemini-2.5-flash-lite"
+
+ttsmodel = "gemini-2.5-flash-preview-tts"
+
 # Initialize session state
 if 'audio_generated' not in st.session_state:
     st.session_state.audio_generated = False
@@ -139,7 +143,7 @@ TEXT:
 {text}
 SUMMARY:"""
         response = client.models.generate_content(
-            model="gemini-2.5-flash-lite",
+            model= textmodel,
             contents=prompt
         )
         return response.text
@@ -154,7 +158,7 @@ def generate_audio_tts(text, api_key, voice_name='Kore', speaking_style=''):
         prompt = f"{speaking_style}: {text}" if speaking_style else text
 
         response = client.models.generate_content(
-            model="gemini-2.5-flash-preview-tts",
+            model= ttsmodel,
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_modalities=["AUDIO"],
