@@ -47,6 +47,10 @@ footer {visibility:hidden;}
 
 st.set_page_config(page_title="🎙️ AI Vocal Coach", layout="wide")
 
+sttmodel = "gemini-2.5-flash-lite"
+
+ttsmodel = "gemini-2.5-flash-preview-tts"
+
 # --- API Key selection ---
 api_keys = {
     "Key 1": st.secrets["KEY_1"],
@@ -207,7 +211,7 @@ if ref_file and not st.session_state.lyrics_text:
         st.session_state.ref_tmp_path = tmp_path
         try:
             response = client.models.generate_content(
-                model="gemini-2.5-flash-lite",
+                model= sttmodel,
                 contents=[
                     {"role": "user", "parts": [
                         {"text": "Extract the complete lyrics from this song and return only the text."},
@@ -317,7 +321,7 @@ if st.session_state.ref_tmp_path and recorded_file_path:
 
     with st.spinner("🎧 Generating feedback..."):
         response = client.models.generate_content(
-            model="gemini-2.5-flash-lite",
+            model= sttmodel,
             contents=[
                 {"role": "user", "parts": [
                     {"text": prompt},
@@ -355,7 +359,7 @@ if st.session_state.ref_tmp_path and recorded_file_path:
                 )
 
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash-preview-tts",
+                    model= ttsmodel,
                     contents=contents,
                     config=config
                 )
