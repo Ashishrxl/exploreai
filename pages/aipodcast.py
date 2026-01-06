@@ -74,7 +74,7 @@ def generate_script(topic: str) -> str:
     Keep it conversational and natural.
     """
     resp = client.models.generate_content(
-        model="gemini-2.5-pro",
+        model="gemini-2.5-flash-lite",
         contents=prompt
     )
     return resp.text
