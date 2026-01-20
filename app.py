@@ -196,6 +196,13 @@ page_html = """
 
   </div>
 
+  <div class="card">
+    <a href="https://exploreai.streamlit.app/ailearner" target="_blank" class="btn csv">
+      📊 <span>AI Learner</span>
+    </a>
+    <div class="desc">Smart  learning guidance by AI.</div>
+  </div>
+
 </div>
 """
 
