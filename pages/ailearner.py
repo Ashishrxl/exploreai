@@ -54,7 +54,7 @@ st.session_state.setdefault("history", [])
 st.session_state.setdefault("resource_decision", {})
 
 # ================= API HELPERS =================
-def search_youtube(query, max_results=5):
+def search_youtube(query, max_results=20):
     url = "https://www.googleapis.com/youtube/v3/search"
     params = {
         "part": "snippet",
@@ -75,7 +75,7 @@ def search_youtube(query, max_results=5):
         return []
 
 
-def search_github(query, max_results=5):
+def search_github(query, max_results=15):
     url = "https://api.github.com/search/repositories"
     headers = {"Accept": "application/vnd.github+json"}
     if GITHUB_TOKEN:
