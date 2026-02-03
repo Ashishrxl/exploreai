@@ -16,17 +16,24 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 from streamlit.components.v1 import html
-html(
-  """
-  <script>
-  try {
-    const sel = window.top.document.querySelectorAll('[href*="streamlit.io"], [href*="streamlit.app"]');
-    sel.forEach(e => e.style.display='none');
-  } catch(e) { console.warn('parent DOM not reachable', e); }
-  </script>
-  """,
-  height=0
-)
+
+
+# ---------------- UI CLEANUP ----------------
+try:
+    html(
+      """
+      <script>
+      try {
+        const sel = window.top.document.querySelectorAll('[href*="streamlit.io"], [href*="streamlit.app"]');
+        sel.forEach(e => e.style.display='none');
+      } catch(e) {}
+      </script>
+      """,
+      height=0
+    )
+except Exception as e:
+    print("HTML injection warning:", e)
+
 hide_streamlit_style = """
 <style>
 #MainMenu {visibility: hidden;}
@@ -35,116 +42,72 @@ footer {visibility: hidden;}
 [data-testid="stToolbar"] {display: none;}
 a[href^="https://github.com"] {display: none !important;}
 a[href^="https://streamlit.io"] {display: none !important;}
-
-/* The following specifically targets and hides all child elements of the header's right side,
-   while preserving the header itself and, by extension, the sidebar toggle button. */
-header > div:nth-child(2) {
-    display: none;
-}
+header > div:nth-child(2) { display: none; }
 </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 
+# ---------------- CONFIG ----------------
 GEMMA_MODEL = "gemma-3-12b-it"
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
-
-# --- API Key selection ---
-api_keys = {
-    "Key 1": st.secrets["KEY_1"],
-    "Key 2": st.secrets["KEY_2"], "Key 3": st.secrets["KEY_3"], "Key 4": st.secrets["KEY_4"], "Key 5": st.secrets["KEY_5"], "Key 6": st.secrets["KEY_6"], "Key 7": st.secrets["KEY_7"], "Key 8": st.secrets["KEY_8"], "Key 9": st.secrets["KEY_9"], "Key 10": st.secrets["KEY_10"], "Key 11": st.secrets["KEY_11"]
-}
-selected_key_name = st.selectbox("Select Key", list(api_keys.keys()))
-api_key = api_keys[selected_key_name]
-
-client = genai.Client(api_key=api_key)
 
 st.set_page_config(page_title="AI Roleplay Story", layout="wide")
 st.title("AI Roleplay Story Generator")
 
+
+# ---------------- API KEYS ----------------
+try:
+    api_keys = {
+        f"Key {i}": st.secrets[f"KEY_{i}"]
+        for i in range(1, 12)
+        if f"KEY_{i}" in st.secrets
+    }
+
+    if not api_keys:
+        st.info("⚠️ API keys are not configured yet.")
+    else:
+        selected_key_name = st.selectbox("Select Key", list(api_keys.keys()))
+        client = genai.Client(api_key=api_keys[selected_key_name])
+
+except Exception as e:
+    st.info("⚠️ Unable to initialize API connection. Please try again later.")
+    print("API init error:", e)
+    client = None
+
+
+# ---------------- INPUTS ----------------
 genres = [
-    # Fantasy & related
-    "Fantasy",
-    "High Fantasy",
-    "Epic Fantasy",
-    "Urban Fantasy",
-    "Sword and Sorcery",
-    "Mythic Fantasy",
-    "Fairy Tale",
-    "Magical Realism",
-    "Gaslamp Fantasy",
-
-    # Science Fiction & related
-    "Science Fiction",
-    "Soft Science Fiction",
-    "Space Opera",
-    "Time Travel",
-    "Alternate History",
-    "Speculative Fiction",
-
-    # Mystery & Adventure
-    "Mystery",
-    "Cozy Mystery",
-    "Detective Fiction",
-    "Adventure",
-    "Action",
-    "Exploration Fiction",
-    "Quest Fiction",
-    "Pirate Adventure",
-
-    # Friendship, Family, & Growing Up
-    "Coming of Age",
-    "Slice of Life",
-    "Family Drama",
-    "School Story",
-    "Animal Story",
-    "Friendship Story",
-
-    # Historical & Cultural
-    "Historical Fiction",
-    "Historical Adventure",
-    "Mythology Retelling",
-
-    # Humor & Lighthearted
-    "Comedy",
-    "Satire",
-    "Parody",
-    "Farce",
-    "Light Fantasy",
-    "Romantic Comedy",
-
-    # Imaginative or Moral Stories
-    "Fable",
-    "Folktale",
-    "Legend",
-    "Adventure Comedy",
-    "Fantasy Adventure",
-
-    # Educational or Wholesome
-    "Educational Fiction",
-    "Environmental Fiction",
-    "Inspirational Fiction",
-    "Eco-Fiction",
-    "Science Fantasy"
+    "Fantasy", "High Fantasy", "Epic Fantasy", "Urban Fantasy",
+    "Science Fiction", "Space Opera", "Time Travel",
+    "Mystery", "Adventure", "Comedy",
+    "Historical Fiction", "Inspirational Fiction"
 ]
 
-# Inputs
 genre = st.selectbox("Select story genre", genres)
 characters = st.text_area("List characters (comma separated)", "Dog, cat, lion")
 length = st.selectbox("Story length", ["Short", "Medium", "Long"])
 language = st.selectbox("Select story language", ["English", "Hindi", "Bhojpuri"])
 
-# Voice choices per language
 voice_options = {
     "English": ["English Male", "English Female"],
     "Hindi": ["Hindi Male", "Hindi Female"],
     "Bhojpuri": ["Bhojpuri Male", "Bhojpuri Female"]
 }
 voice_choice = st.selectbox("Select voice", voice_options[language])
-
 add_audio = st.checkbox("Generate audio of full story")
 
-# --- Utility functions ---
+
+# ---------------- HELPERS ----------------
+def safe_run(fn, user_msg="Something went wrong. Please try again."):
+    try:
+        return fn()
+    except Exception as e:
+        st.warning(user_msg)
+        print("Error:", e)
+        return None
+
+
 def pcm_to_wav_bytes(pcm_bytes, channels=1, rate=24000, sample_width=2):
     buf = io.BytesIO()
     with wave.open(buf, "wb") as wf:
@@ -155,304 +118,101 @@ def pcm_to_wav_bytes(pcm_bytes, channels=1, rate=24000, sample_width=2):
     buf.seek(0)
     return buf.read()
 
-def animate_progress_bar(progress, placeholder, text, est_time=10):
-    global running
-    running = True
-    start = time.time()
-    while running:
-        elapsed = time.time() - start
-        remaining = max(0, est_time - int(elapsed))
-        pct = min(100, int((elapsed / est_time) * 100))
-        progress.progress(pct, text=f"{text} ~{remaining}s left")
-        placeholder.write(f"⏳ {text} (about {remaining}s remaining)")
-        time.sleep(0.2)
-        if pct >= 100:
-            break
 
-def map_voice(voice_choice):
-    mapping = {
-        "English Male": "Charon",
-        "English Female": "Kore",
-        "Hindi Male": "Charon",
-        "Hindi Female": "Kore",
-        "Bhojpuri Male": "Charon",
-        "Bhojpuri Female": "Kore"
-    }
-    return mapping.get(voice_choice, "Kore")
-
-def map_language_code(language):
-    codes = {
-        "English": "en-US",
-        "Hindi": "hi-IN",
-        "Bhojpuri": "bh-IN"  # fallback to hi-IN
-    }
-    return codes.get(language, "en-US")
+def map_voice(v):
+    return "Charon" if "Male" in v else "Kore"
 
 
+def map_language_code(lang):
+    return {"English": "en-US", "Hindi": "hi-IN", "Bhojpuri": "hi-IN"}.get(lang, "en-US")
 
 
-
+# ---------------- PDF ----------------
 def generate_pdf_reportlab(text, title="AI Roleplay Story"):
-    buf = io.BytesIO()
+    def _gen():
+        buf = io.BytesIO()
 
-    # ✅ Font setup
-    deva_font_path = "NotoSansDevanagari-Regular.ttf"
-    latin_font_path = "NotoSans-Regular.ttf"
+        pdfmetrics.registerFont(TTFont("Latin", "NotoSans-Regular.ttf"))
+        pdfmetrics.registerFont(TTFont("Deva", "NotoSansDevanagari-Regular.ttf"))
 
-    if not os.path.exists(deva_font_path):
-        raise FileNotFoundError(
-            "Add NotoSansDevanagari-Regular.ttf in the folder for Hindi/Unicode support."
-        )
-    if not os.path.exists(latin_font_path):
-        raise FileNotFoundError(
-            "Add NotoSans-Regular.ttf in the folder for English support."
-        )
+        doc = SimpleDocTemplate(buf, pagesize=A4)
+        styles = getSampleStyleSheet()
+        styles.add(ParagraphStyle(name="Latin", fontName="Latin", fontSize=12))
+        styles.add(ParagraphStyle(name="Deva", fontName="Deva", fontSize=12))
 
-    pdfmetrics.registerFont(TTFont("NotoSansDeva", deva_font_path))
-    pdfmetrics.registerFont(TTFont("NotoSansLatin", latin_font_path))
+        def is_deva(t): return bool(re.search(r'[\u0900-\u097F]', t))
 
-    # Create document
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=A4,
-        rightMargin=50,
-        leftMargin=50,
-        topMargin=50,
-        bottomMargin=50,
-    )
+        story = [Paragraph(title, styles["Latin"]), Spacer(1, 12)]
+        for line in text.split("\n"):
+            if line.strip():
+                style = styles["Deva"] if is_deva(line) else styles["Latin"]
+                story.append(Paragraph(line, style))
+                story.append(Spacer(1, 6))
 
-    # Styles
-    stylesheet = getSampleStyleSheet()
+        doc.build(story)
+        buf.seek(0)
+        return buf
 
-    # Devanagari (Hindi/Bhojpuri) styles
-    stylesheet.add(
-        ParagraphStyle(
-            name="MyBodyDeva",
-            fontName="NotoSansDeva",
-            fontSize=12,
-            leading=16
-        )
-    )
-    stylesheet.add(
-        ParagraphStyle(
-            name="MyTitleDeva",
-            fontName="NotoSansDeva",
-            fontSize=18,
-            leading=22,
-            alignment=1  # centered
-        )
-    )
-
-    # Latin (English) styles
-    stylesheet.add(
-        ParagraphStyle(
-            name="MyBodyLatin",
-            fontName="NotoSansLatin",
-            fontSize=12,
-            leading=16
-        )
-    )
-    stylesheet.add(
-        ParagraphStyle(
-            name="MyTitleLatin",
-            fontName="NotoSansLatin",
-            fontSize=18,
-            leading=22,
-            alignment=1  # centered
-        )
-    )
-
-    # Simple Devanagari detector
-    devanagari_re = re.compile(r'[\u0900-\u097F]')
-    def is_devanagari(text_line):
-        return bool(devanagari_re.search(text_line))
-
-    story = []
-
-    # Title
-    if is_devanagari(title):
-        story.append(Paragraph(title, stylesheet["MyTitleDeva"]))
-    else:
-        story.append(Paragraph(title, stylesheet["MyTitleLatin"]))
-    story.append(Spacer(1, 20))
-
-    # Content
-    for line in text.split("\n"):
-        if line.strip():
-            if is_devanagari(line):
-                story.append(Paragraph(line.strip(), stylesheet["MyBodyDeva"]))
-            else:
-                story.append(Paragraph(line.strip(), stylesheet["MyBodyLatin"]))
-            story.append(Spacer(1, 8))
-
-    doc.build(story)
-    buf.seek(0)
-    return buf
-
-# 🔹 Wrapper function
-def save_story_as_pdf(story, title="AI Roleplay Story"):
-    pdf_buffer = generate_pdf_reportlab(story, title=title)
-    return pdf_buffer
+    return safe_run(_gen, "⚠️ PDF could not be generated.")
 
 
-# ✅ Example usage inside your Streamlit app
-# After story is generated:
-# story = st.session_state["story"]
-
-
-def generate_pdf_reportlabbb(text, title="AI Roleplay Story"):
-    buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=A4)
-    width, height = A4
-
-    font_path = "NotoSansDevanagari-Regular.ttf"
-    if not os.path.exists(font_path):
-        raise FileNotFoundError("Add NotoSansDevanagari-Regular.ttf in the folder for Hindi/Unicode support.")
-    pdfmetrics.registerFont(TTFont("NotoSans", font_path))
-
-    y = height - 50
-    c.setFont("NotoSans", 18)
-    c.drawString(50, y, title)
-    y -= 30
-
-    c.setFont("NotoSans", 12)
-    for line in text.split("\n"):
-        if y < 50:
-            c.showPage()
-            c.setFont("NotoSans", 12)
-            y = height - 50
-        c.drawString(50, y, line)
-        y -= 18
-
-    c.showPage()
-    c.save()
-    buf.seek(0)
-    return buf
-
-# --- PDF generation using reportlab ---
-
-def generate_pdf_reportlabb(text, title="AI Roleplay Story"):
-    buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=A4)
-    width, height = A4
-
-    
-    pdfmetrics.registerFont(TTFont("DejaVu", "DejaVuSans.ttf"))
-
-    y = height - 50
-    c.setFont("DejaVu", 18)
-    c.drawString(50, y, title)
-    y -= 30
-
-    c.setFont("DejaVu", 12)
-    for line in text.split("\n"):
-        if y < 50:  # new page
-            c.showPage()
-            c.setFont("DejaVu", 12)
-            y = height - 50
-        c.drawString(50, y, line)
-        y -= 18
-
-    c.showPage()
-    c.save()
-    buf.seek(0)
-    return buf 
-
-# --- Main: Generate story + audio ---
+# ---------------- STORY GENERATION ----------------
 if st.button("Generate Story"):
-    # Story generation
-    story_progress = st.progress(0, text="Generating story...")
-    story_placeholder = st.empty()
-    thread = threading.Thread(
-        target=animate_progress_bar,
-        args=(story_progress, story_placeholder, "Generating story", 8)
-    )
-    thread.start()
-
-    prompt = (
-        f"Write a {length} {genre} roleplay story in {language} ONLY. "
-        f"Include first a brief introduction of each character ({characters}) and then the story. "
-        f"Do NOT include text in any other language. "
-        f"Do NOT include explanations, summaries, or extra content. "
-        f"The output must be entirely in {language} and contain ONLY character introductions and the story."
-    )
-
-    resp = client.models.generate_content(model=GEMMA_MODEL, contents=[prompt])
-    story = getattr(resp, "text", str(resp))
-    st.session_state["story"] = story  # persistent
-
-    running = False
-    thread.join()
-    story_progress.progress(100, text="Story generated ✅")
-    story_placeholder.write("✅ Story ready!")
-
-    # Audio generation
-    if add_audio:
-        audio_progress = st.progress(0, text="Generating audio...")
-        audio_placeholder = st.empty()
-        thread = threading.Thread(
-            target=animate_progress_bar,
-            args=(audio_progress, audio_placeholder, "Generating audio", 12)
-        )
-        thread.start()
-
-        config = types.GenerateContentConfig(
-            response_modalities=["AUDIO"],
-            speech_config=types.SpeechConfig(
-                language_code=map_language_code(language),
-                voice_config=types.VoiceConfig(
-                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                        voice_name=map_voice(voice_choice)
-                    )
+    if not client:
+        st.info("⚠️ AI service is currently unavailable.")
+    else:
+        with st.spinner("✨ Creating your story..."):
+            def _story():
+                prompt = (
+                    f"Write a {length} {genre} roleplay story in {language} ONLY. "
+                    f"Introduce characters first ({characters})."
                 )
-            )
-        )
+                resp = client.models.generate_content(model=GEMMA_MODEL, contents=[prompt])
+                return resp.text
 
-        tts_resp = client.models.generate_content(
-            model=TTS_MODEL,
-            contents=[st.session_state["story"]],
-            config=config
-        )
+            story = safe_run(_story, "⚠️ Story generation failed.")
+            if story:
+                st.session_state["story"] = story
+                st.toast("📖 Story ready!", icon="✅")
 
-        data = None
-        if hasattr(tts_resp, "candidates") and tts_resp.candidates:
-            candidate = tts_resp.candidates[0]
-            if hasattr(candidate, "content") and hasattr(candidate.content, "parts"):
-                for part in candidate.content.parts:
-                    if hasattr(part, "inline_data") and hasattr(part.inline_data, "data"):
-                        data = part.inline_data.data
-                        break
 
-        running = False
-        thread.join()
-        audio_progress.progress(100, text="Audio generated ✅")
-        audio_placeholder.write("✅ Audio ready!")
-
-        if data:
-            if isinstance(data, str):
-                pcm = base64.b64decode(data)
-            else:
-                pcm = bytes(data)
-            wav_bytes = pcm_to_wav_bytes(pcm)
-            st.session_state["audio_bytes"] = wav_bytes
-
-# --- Display story persistently ---
+# ---------------- DISPLAY STORY ----------------
 if "story" in st.session_state:
     st.subheader("Story Script")
     st.write(st.session_state["story"])
-    pdf_buffer = save_story_as_pdf(st.session_state["story"], title = "My AI Roleplay")
 
- #   st.download_button(label="Download Story as PDF", data=pdf_buffer, file_name="story.pdf", mime="application/pdf)
+    pdf = generate_pdf_reportlab(st.session_state["story"], "My AI Roleplay")
+    if pdf:
+        st.download_button("Download Story PDF", pdf, "story.pdf", "application/pdf")
 
 
-# --- Display audio persistently ---
-if "audio_bytes" in st.session_state:
-    st.audio(st.session_state["audio_bytes"], format="audio/wav")
-    st.download_button(
-        label="Download Audio",
-        data=st.session_state["audio_bytes"],
-        file_name="story_audio.wav",
-        mime="audio/wav"
-    )
+# ---------------- AUDIO ----------------
+if add_audio and "story" in st.session_state and client:
+    with st.spinner("🔊 Generating audio..."):
+        def _audio():
+            config = types.GenerateContentConfig(
+                response_modalities=["AUDIO"],
+                speech_config=types.SpeechConfig(
+                    language_code=map_language_code(language),
+                    voice_config=types.VoiceConfig(
+                        prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                            voice_name=map_voice(voice_choice)
+                        )
+                    )
+                )
+            )
+            tts = client.models.generate_content(
+                model=TTS_MODEL,
+                contents=[st.session_state["story"]],
+                config=config
+            )
+            data = tts.candidates[0].content.parts[0].inline_data.data
+            return pcm_to_wav_bytes(base64.b64decode(data))
+
+        audio = safe_run(_audio, "⚠️ Audio could not be generated.")
+        if audio:
+            st.audio(audio)
+            st.download_button("Download Audio", audio, "story.wav", "audio/wav")
+
 
 st.markdown("---")
