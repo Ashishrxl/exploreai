@@ -252,7 +252,8 @@ st.subheader("🚀 Generate Singing Voice")
 
 if st.session_state.original_path:
     if st.button("🎶 Transcribe & Sing"):
-        asyncio.run(transcribe_and_sing())
+        with st.spinner("🔊 Generating audio..."):
+            asyncio.run(transcribe_and_sing())
 else:
     st.info("ℹ️ Upload or record audio to get started.")
 
