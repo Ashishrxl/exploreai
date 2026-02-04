@@ -175,6 +175,26 @@ async def synthesize_speech(text_prompt, voice_name="Kore"):
         return None
 
 # -------------------------
+
+# -------------------------
+# PCM → WAV Converter
+# -------------------------
+def pcm_to_wav(pcm_bytes, sample_rate=24000, channels=1, sample_width=2):
+    try:
+        pcm_array = np.frombuffer(pcm_bytes, dtype=np.int16)
+
+        wav_buffer = io.BytesIO()
+        with wave.open(wav_buffer, 'wb') as wf:
+            wf.setnchannels(channels)
+            wf.setsampwidth(sample_width)
+            wf.setframerate(sample_rate)
+            wf.writeframes(pcm_array.tobytes())
+
+        return wav_buffer.getvalue()
+
+    except Exception:
+        st.warning("⚠️ Failed to convert generated audio.")
+        return None
 # Transcribe & Sing
 # -------------------------
 async def transcribe_and_sing():
@@ -214,6 +234,8 @@ async def transcribe_and_sing():
         return
 
     wav_bytes = pcm_to_wav(pcm)
+    if wav_bytes is None:
+        return
     out_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
     with open(out_file.name, "wb") as f:
         f.write(wav_bytes)
