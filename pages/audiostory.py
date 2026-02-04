@@ -6,15 +6,16 @@ import base64
 import time
 import threading
 import os
+import mimetypes
+import struct
+
 from google import genai
 from google.genai import types
 from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-
 from streamlit.components.v1 import html
 
 
@@ -71,7 +72,7 @@ try:
         client = genai.Client(api_key=api_keys[selected_key_name])
 
 except Exception as e:
-    st.info("⚠️ Unable to initialize API connection. Please try again later.")
+    st.info("⚠️ Unable to initialize API connection.")
     print("API init error:", e)
     client = None
 
@@ -99,24 +100,13 @@ add_audio = st.checkbox("Generate audio of full story")
 
 
 # ---------------- HELPERS ----------------
-def safe_run(fn, user_msg="Something went wrong. Please try again."):
+def safe_run(fn, user_msg="Something went wrong."):
     try:
         return fn()
     except Exception as e:
         st.warning(user_msg)
         print("Error:", e)
         return None
-
-
-def pcm_to_wav_bytes(pcm_bytes, channels=1, rate=24000, sample_width=2):
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as wf:
-        wf.setnchannels(channels)
-        wf.setsampwidth(sample_width)
-        wf.setframerate(rate)
-        wf.writeframes(pcm_bytes)
-    buf.seek(0)
-    return buf.read()
 
 
 def map_voice(v):
@@ -129,6 +119,7 @@ def map_language_code(lang):
 
 # ---------------- PDF ----------------
 def generate_pdf_reportlab(text, title="AI Roleplay Story"):
+
     def _gen():
         buf = io.BytesIO()
 
@@ -140,9 +131,11 @@ def generate_pdf_reportlab(text, title="AI Roleplay Story"):
         styles.add(ParagraphStyle(name="Latin", fontName="Latin", fontSize=12))
         styles.add(ParagraphStyle(name="Deva", fontName="Deva", fontSize=12))
 
-        def is_deva(t): return bool(re.search(r'[\u0900-\u097F]', t))
+        def is_deva(t):
+            return bool(re.search(r'[\u0900-\u097F]', t))
 
         story = [Paragraph(title, styles["Latin"]), Spacer(1, 12)]
+
         for line in text.split("\n"):
             if line.strip():
                 style = styles["Deva"] if is_deva(line) else styles["Latin"]
@@ -159,18 +152,23 @@ def generate_pdf_reportlab(text, title="AI Roleplay Story"):
 # ---------------- STORY GENERATION ----------------
 if st.button("Generate Story"):
     if not client:
-        st.info("⚠️ AI service is currently unavailable.")
+        st.info("⚠️ AI service unavailable.")
     else:
         with st.spinner("✨ Creating your story..."):
+
             def _story():
                 prompt = (
                     f"Write a {length} {genre} roleplay story in {language} ONLY. "
                     f"Introduce characters first ({characters})."
                 )
-                resp = client.models.generate_content(model=GEMMA_MODEL, contents=[prompt])
+                resp = client.models.generate_content(
+                    model=GEMMA_MODEL,
+                    contents=[prompt]
+                )
                 return resp.text
 
             story = safe_run(_story, "⚠️ Story generation failed.")
+
             if story:
                 st.session_state["story"] = story
                 st.toast("📖 Story ready!", icon="✅")
@@ -186,10 +184,69 @@ if "story" in st.session_state:
         st.download_button("Download Story PDF", pdf, "story.pdf", "application/pdf")
 
 
+# ---------------- AUDIO HELPERS ----------------
+def parse_audio_mime_type(mime_type: str):
+    bits_per_sample = 16
+    rate = 24000
+
+    parts = mime_type.split(";")
+    for param in parts:
+        param = param.strip()
+
+        if param.lower().startswith("rate="):
+            try:
+                rate = int(param.split("=")[1])
+            except:
+                pass
+
+        if "audio/L" in param:
+            try:
+                bits_per_sample = int(param.split("L")[1])
+            except:
+                pass
+
+    return {"bits_per_sample": bits_per_sample, "rate": rate}
+
+
+def convert_to_wav(audio_data: bytes, mime_type: str) -> bytes:
+    params = parse_audio_mime_type(mime_type)
+
+    bits_per_sample = params["bits_per_sample"]
+    sample_rate = params["rate"]
+    num_channels = 1
+
+    data_size = len(audio_data)
+    bytes_per_sample = bits_per_sample // 8
+    block_align = num_channels * bytes_per_sample
+    byte_rate = sample_rate * block_align
+    chunk_size = 36 + data_size
+
+    header = struct.pack(
+        "<4sI4s4sIHHIIHH4sI",
+        b"RIFF",
+        chunk_size,
+        b"WAVE",
+        b"fmt ",
+        16,
+        1,
+        num_channels,
+        sample_rate,
+        byte_rate,
+        block_align,
+        bits_per_sample,
+        b"data",
+        data_size,
+    )
+
+    return header + audio_data
+
+
 # ---------------- AUDIO ----------------
 if add_audio and "story" in st.session_state and client:
     with st.spinner("🔊 Generating audio..."):
+
         def _audio():
+
             config = types.GenerateContentConfig(
                 response_modalities=["AUDIO"],
                 speech_config=types.SpeechConfig(
@@ -201,15 +258,48 @@ if add_audio and "story" in st.session_state and client:
                     )
                 )
             )
-            tts = client.models.generate_content(
+
+            contents = [
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=st.session_state["story"])]
+                )
+            ]
+
+            audio_chunks = []
+            mime_type = None
+
+            for chunk in client.models.generate_content_stream(
                 model=TTS_MODEL,
-                contents=[st.session_state["story"]],
+                contents=contents,
                 config=config
-            )
-            data = tts.candidates[0].content.parts[0].inline_data.data
-            return pcm_to_wav_bytes(base64.b64decode(data))
+            ):
+
+                if (
+                    chunk.candidates is None
+                    or chunk.candidates[0].content is None
+                    or chunk.candidates[0].content.parts is None
+                ):
+                    continue
+
+                part = chunk.candidates[0].content.parts[0]
+
+                if part.inline_data and part.inline_data.data:
+                    mime_type = part.inline_data.mime_type
+                    audio_chunks.append(part.inline_data.data)
+
+            if not audio_chunks:
+                return None
+
+            combined_audio = b"".join(audio_chunks)
+
+            if mime_type and "wav" not in mime_type.lower():
+                combined_audio = convert_to_wav(combined_audio, mime_type)
+
+            return combined_audio
 
         audio = safe_run(_audio, "⚠️ Audio could not be generated.")
+
         if audio:
             st.audio(audio)
             st.download_button("Download Audio", audio, "story.wav", "audio/wav")
