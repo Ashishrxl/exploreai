@@ -8,8 +8,9 @@ from google import genai
 import requests
 import wave
 import numpy as np
-
 from streamlit.components.v1 import html
+
+
 html(
   """
   <script>
@@ -22,6 +23,15 @@ html(
   height=0
 )
 
+disable_footer_click = """
+    <style>
+    footer {pointer-events: none;}
+    </style>
+"""
+st.markdown(disable_footer_click, unsafe_allow_html=True)
+
+
+# --- CSS: Hide all unwanted items but KEEP sidebar toggle ---
 hide_streamlit_style = """
 <style>
 #MainMenu {visibility: hidden;}
@@ -30,6 +40,9 @@ footer {visibility: hidden;}
 [data-testid="stToolbar"] {display: none;}
 a[href^="https://github.com"] {display: none !important;}
 a[href^="https://streamlit.io"] {display: none !important;}
+
+/* The following specifically targets and hides all child elements of the header's right side,
+   while preserving the header itself and, by extension, the sidebar toggle button. */
 header > div:nth-child(2) {
     display: none;
 }
