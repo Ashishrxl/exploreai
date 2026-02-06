@@ -65,8 +65,8 @@ api_keys = {
     for i in range(1, 12)
 }
 
-api_keys = {k: v for k, v in api_keys.items() if v}
 random.shuffle(api_keys)
+api_keys = {k: v for k, v in api_keys.items() if v}
 
 
 
