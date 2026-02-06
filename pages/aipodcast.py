@@ -2,6 +2,7 @@ import streamlit as st
 from google import genai
 from google.genai import types
 import wave
+import random
 import base64
 from streamlit.components.v1 import html
 
@@ -49,6 +50,7 @@ try:
         st.secrets["KEY_10"],
         st.secrets["KEY_11"],
     ]
+    random.shuffle(api_keys)
 except Exception:
     st.error("⚠️ API keys not configured properly.")
     st.stop()
