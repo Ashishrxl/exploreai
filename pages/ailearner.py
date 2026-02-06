@@ -65,7 +65,7 @@ api_keys = {
     for i in range(1, 12)
 }
 
-logging info(api_keys)
+logging.info(api_keys)
 api_keys = {k: v for k, v in api_keys.items() if v}
 
 
