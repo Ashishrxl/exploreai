@@ -103,7 +103,7 @@ def generate_script(topic: str) -> str:
                 model=textmodel,
                 contents=prompt
             )
-            logging.info(key)
+            
 
             return resp.text or "Script generation failed."
 
