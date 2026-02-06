@@ -2,7 +2,15 @@ import streamlit as st
 import google.generativeai as genai
 import requests
 import json
+import random
 from streamlit.components.v1 import html
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    force=True
+)
 
 
 html(
@@ -58,6 +66,7 @@ api_keys = {
 }
 
 api_keys = {k: v for k, v in api_keys.items() if v}
+random.shuffle(api_keys)
 
 
 
@@ -75,6 +84,7 @@ def generate_with_key_rotation(prompt):
         try:
             genai.configure(api_key=key)
             model = genai.GenerativeModel("gemini-2.5-flash-lite")
+            logging.info(key)
             return model.generate_content(prompt).text
 
         except Exception:
