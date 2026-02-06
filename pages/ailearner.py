@@ -47,7 +47,7 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 # ================= PAGE CONFIG =================
 st.set_page_config(
-    page_title="AI Learning Path Generator",
+    page_title="AI Learner",
     page_icon="🎓",
     layout="centered"
 )
