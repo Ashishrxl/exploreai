@@ -65,9 +65,9 @@ api_keys = {
     for i in range(1, 12)
 }
 
-logging.info(api_keys)
-api_keys = {k: v for k, v in api_keys.items() if v}
 
+api_keys = {k: v for k, v in api_keys.items() if v}
+logging.info(api_keys)
 
 
 YOUTUBE_API_KEY = safe_get_secret("youtube", "YouTube API Key")
