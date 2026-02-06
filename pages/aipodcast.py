@@ -61,7 +61,7 @@ try:
         st.secrets["KEY_11"],
     ]
     random.shuffle(api_keys)
-    logging.info(api_keys)
+    
 except Exception:
     st.error("⚠️ API keys not configured properly.")
     st.stop()
