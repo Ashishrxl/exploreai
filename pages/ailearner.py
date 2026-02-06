@@ -59,26 +59,14 @@ api_keys = {
 
 api_keys = {k: v for k, v in api_keys.items() if v}
 
-selected_key_name = st.selectbox(
-    "Select Key",
-    list(api_keys.keys()) if api_keys else ["No API Keys Available"]
-)
+
 
 YOUTUBE_API_KEY = safe_get_secret("youtube", "YouTube API Key")
 GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN")
 
 # ================= KEY ROTATION =================
 def get_key_rotation_list():
-    keys = list(api_keys.values())
-    if not keys:
-        return []
-
-    selected_value = api_keys.get(selected_key_name)
-    if selected_value in keys:
-        idx = keys.index(selected_value)
-        return keys[idx:] + keys[:idx]
-
-    return keys
+    return list(api_keys.values())
 
 def generate_with_key_rotation(prompt):
     keys = get_key_rotation_list()
