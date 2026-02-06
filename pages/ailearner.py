@@ -87,10 +87,6 @@ def generate_with_key_rotation(prompt):
         try:
             genai.configure(api_key=key)
             model = genai.GenerativeModel("gemini-2.5-flash-lite")
-
-            if i > 0:
-                st.info("🔄 Switched to backup API key")
-
             return model.generate_content(prompt).text
 
         except Exception:
