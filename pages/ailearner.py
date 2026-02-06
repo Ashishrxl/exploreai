@@ -216,7 +216,7 @@ def simple_llm(prompt):
     return generate_with_key_rotation(prompt)
 
 # ================= UI =================
-st.title("🎓 AI-Personalized Learning Path Generator")
+st.title("🎓 AI Learner")
 st.caption("Gemini • YouTube • Adaptive Resources")
 st.divider()
 
