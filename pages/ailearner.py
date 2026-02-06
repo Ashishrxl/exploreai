@@ -35,8 +35,6 @@ footer {visibility: hidden;}
 a[href^="https://github.com"] {display: none !important;}
 a[href^="https://streamlit.io"] {display: none !important;}
 
-/* The following specifically targets and hides all child elements of the header's right side,
-   while preserving the header itself and, by extension, the sidebar toggle button. */
 header > div:nth-child(2) {
     display: none;
 }
@@ -80,19 +78,52 @@ selected_key_name = st.selectbox(
     list(api_keys.keys()) if api_keys else ["No API Keys Available"]
 )
 
-GOOGLE_API_KEY = api_keys.get(selected_key_name)
 YOUTUBE_API_KEY = safe_get_secret("youtube", "YouTube API Key")
 GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", None)
 
-if GOOGLE_API_KEY:
-    try:
-        genai.configure(api_key=GOOGLE_API_KEY)
-        model = genai.GenerativeModel("gemini-2.5-flash-lite")
-    except Exception:
-        model = None
-        st.info("🤖 AI model is temporarily unavailable.")
-else:
-    model = None
+# ================= KEY ROTATION SYSTEM =================
+def get_key_rotation_list():
+    """
+    Starts from selected key and rotates through remaining keys
+    """
+    keys = list(api_keys.values())
+    if not keys:
+        return []
+
+    selected_value = api_keys.get(selected_key_name)
+    if selected_value in keys:
+        start = keys.index(selected_value)
+        return keys[start:] + keys[:start]
+
+    return keys
+
+def generate_with_key_rotation(prompt):
+    """
+    Try all API keys until success
+    """
+    for key in get_key_rotation_list():
+        try:
+            genai.configure(api_key=key)
+            model = genai.GenerativeModel("gemini-2.5-flash-lite")
+            response = model.generate_content(prompt)
+            return response.text
+        except Exception:
+            continue
+
+    return "⚠️ All API keys failed or quota exceeded."
+
+def decide_with_key_rotation(prompt):
+    for key in get_key_rotation_list():
+        try:
+            genai.configure(api_key=key)
+            model = genai.GenerativeModel("gemini-2.5-flash-lite")
+            response = model.generate_content(prompt)
+            return json.loads(response.text)
+        except Exception:
+            continue
+
+    return None
+
 
 # ================= SESSION STATE =================
 st.session_state.setdefault("learning_plan", "")
@@ -158,16 +189,8 @@ def search_github(query, max_results=15):
 
 # ================= AI LOGIC =================
 def decide_resources(goal, style):
-    if not model:
-        return {
-            "use_github": True,
-            "use_case_studies": True,
-            "use_practice": True,
-            "use_reading_guides": True
-        }
 
-    try:
-        prompt = f"""
+    prompt = f"""
 Decide required resources for learning.
 
 Goal: {goal}
@@ -175,22 +198,21 @@ Learning style: {', '.join(style)}
 
 Return valid JSON only.
 """
-        response = model.generate_content(prompt)
-        return json.loads(response.text)
-    except Exception:
-        return {
-            "use_github": "Hands-on Projects" in style,
-            "use_case_studies": True,
-            "use_practice": True,
-            "use_reading_guides": True
-        }
+    result = decide_with_key_rotation(prompt)
+
+    if result:
+        return result
+
+    return {
+        "use_github": True,
+        "use_case_studies": True,
+        "use_practice": True,
+        "use_reading_guides": True
+    }
 
 def generate_learning_plan(context):
-    if not model:
-        return "⚠️ AI learning plan generation is currently unavailable."
 
-    try:
-        prompt = f"""
+    prompt = f"""
 Create a personalized learning plan with:
 - Weekly roadmap
 - Daily tasks (30–90 minutes)
@@ -200,17 +222,10 @@ Create a personalized learning plan with:
 Context:
 {context}
 """
-        return model.generate_content(prompt).text
-    except Exception:
-        return "⚠️ Unable to generate learning plan right now."
+    return generate_with_key_rotation(prompt)
 
 def simple_llm(prompt):
-    if not model:
-        return "ℹ️ AI content is temporarily unavailable."
-    try:
-        return model.generate_content(prompt).text
-    except Exception:
-        return "ℹ️ Content could not be generated at this time."
+    return generate_with_key_rotation(prompt)
 
 # ================= UI =================
 st.title("🎓 AI-Personalized Learning Path Generator")
