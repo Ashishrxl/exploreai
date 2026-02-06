@@ -101,8 +101,6 @@ def decide_with_key_rotation(prompt):
         try:
             genai.configure(api_key=key)
             model = genai.GenerativeModel("gemini-2.5-flash-lite")
-
-            if i > 0:
                 
 
             return json.loads(model.generate_content(prompt).text)
