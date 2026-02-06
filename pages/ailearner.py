@@ -67,7 +67,12 @@ api_keys = {
 
 
 api_keys = {k: v for k, v in api_keys.items() if v}
+
+
+api_keys = dict(random.sample(api_keys.items(), len(api_keys)))
+
 logging.info(api_keys)
+
 
 
 YOUTUBE_API_KEY = safe_get_secret("youtube", "YouTube API Key")
@@ -84,7 +89,7 @@ def generate_with_key_rotation(prompt):
         try:
             genai.configure(api_key=key)
             model = genai.GenerativeModel("gemini-2.5-flash-lite")
-            logging.info(key)
+            
             return model.generate_content(prompt).text
 
         except Exception:
