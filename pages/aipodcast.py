@@ -6,6 +6,16 @@ import random
 import base64
 from streamlit.components.v1 import html
 
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    force=True
+)
+
+
+
 # --- Hide Streamlit UI elements ---
 try:
     html(
@@ -51,7 +61,7 @@ try:
         st.secrets["KEY_11"],
     ]
     random.shuffle(api_keys)
-    print(api_keys)
+    logging.info(api_keys)
 except Exception:
     st.error("⚠️ API keys not configured properly.")
     st.stop()
