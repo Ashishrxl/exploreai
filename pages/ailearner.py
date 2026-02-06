@@ -30,7 +30,7 @@ hide_streamlit_style = """
 footer {visibility: hidden;}
 [data-testid="stStatusWidget"] {display: none;}
 [data-testid="stToolbar"] {display: none;}
-a[href^="https://github.com"] {display: none !important;}
+header a[href*="github"] {display:none;}
 a[href^="https://streamlit.io"] {display: none !important;}
 header > div:nth-child(2) { display: none; }
 </style>
