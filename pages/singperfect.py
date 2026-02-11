@@ -1,5 +1,6 @@
 import streamlit as st
 import tempfile
+import random
 import numpy as np
 import soundfile as sf
 from pydub import AudioSegment
@@ -54,10 +55,12 @@ ttsmodel = "gemini-2.5-flash-preview-tts"
 # API Keys Collection (Auto Rotation)
 # ==============================
 api_keys = []
-for i in range(1, 50):  # supports up to 50 keys safely
+for i in range(1, 12):  # supports up to 50 keys safely
     key_name = f"KEY_{i}"
     if key_name in st.secrets:
         api_keys.append(st.secrets[key_name])
+
+random.shuffle(api_keys)
 
 if not api_keys:
     st.warning("🔑 AI service is not configured. Please contact the app administrator.")
