@@ -59,7 +59,7 @@ try:
         for i in range(1, 12)
         if f"KEY_{i}" in st.secrets
     ]
-
+    random.shuffle(api_keys)
     if not api_keys:
         st.error("⚠️ No API keys configured.")
     else:
