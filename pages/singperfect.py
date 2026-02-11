@@ -51,31 +51,25 @@ sttmodel = "gemini-2.5-flash-lite"
 ttsmodel = "gemini-2.5-flash-preview-tts"
 
 # ==============================
-# API Key selection (safe)
+# API Keys Collection (Auto Rotation)
 # ==============================
-api_keys = {}
-for i in range(1, 12):
+api_keys = []
+for i in range(1, 50):  # supports up to 50 keys safely
     key_name = f"KEY_{i}"
     if key_name in st.secrets:
-        api_keys[f"Key {i}"] = st.secrets[key_name]
+        api_keys.append(st.secrets[key_name])
 
 if not api_keys:
-    st.warning("🔑 API keys are not configured yet. Please add them in Streamlit Secrets.")
+    st.warning("🔑 AI service is not configured. Please contact the app administrator.")
     st.stop()
-
-selected_key_name = st.selectbox("Select Key (priority order)", list(api_keys.keys()))
-selected_key = api_keys[selected_key_name]
-
-# Create ordered key list (selected first, then others)
-ordered_keys = [selected_key] + [v for k, v in api_keys.items() if v != selected_key]
 
 # ==============================
 # Gemini key rotation helper
 # ==============================
 def generate_with_key_rotation(model, contents, config=None):
-    last_error = None
+    errors = []
 
-    for key in ordered_keys:
+    for key in api_keys:
         try:
             client = genai.Client(api_key=key)
 
@@ -84,13 +78,20 @@ def generate_with_key_rotation(model, contents, config=None):
                 contents=contents,
                 config=config
             )
-            return response
+
+            if response:
+                return response
 
         except Exception as e:
-            last_error = e
+            errors.append(str(e))
             continue
 
-    st.error("⚠️ All AI service keys are temporarily unavailable. Please try again later.")
+    # Friendly error message
+    st.error(
+        "⚠️ Our AI service is currently busy or temporarily unavailable.\n\n"
+        "👉 Please wait a moment and try again.\n"
+        "👉 If the issue continues, try refreshing the page."
+    )
     return None
 
 
