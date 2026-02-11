@@ -1,14 +1,7 @@
 import streamlit as st
 import io
 import re
-import wave
-import base64
-import time
-import threading
-import os
-import mimetypes
 import struct
-
 from google import genai
 from google.genai import types
 from reportlab.lib.pagesizes import A4
@@ -57,24 +50,41 @@ st.set_page_config(page_title="AI Roleplay Story", layout="wide")
 st.title("AI Roleplay Story Generator")
 
 
-# ---------------- API KEYS ----------------
+# ---------------- LOAD API KEYS ----------------
+clients = []
+
 try:
-    api_keys = {
-        f"Key {i}": st.secrets[f"KEY_{i}"]
+    api_keys = [
+        st.secrets[f"KEY_{i}"]
         for i in range(1, 12)
         if f"KEY_{i}" in st.secrets
-    }
+    ]
 
     if not api_keys:
-        st.info("⚠️ API keys are not configured yet.")
+        st.error("⚠️ No API keys configured.")
     else:
-        selected_key_name = st.selectbox("Select Key", list(api_keys.keys()))
-        client = genai.Client(api_key=api_keys[selected_key_name])
+        clients = [genai.Client(api_key=k) for k in api_keys]
 
 except Exception as e:
-    st.info("⚠️ Unable to initialize API connection.")
-    print("API init error:", e)
-    client = None
+    st.error("⚠️ Failed to initialize AI service.")
+    print("API error:", e)
+
+
+# ---------------- KEY ROTATION ----------------
+def call_with_key_rotation(fn):
+    last_error = None
+
+    for idx, client in enumerate(clients):
+        try:
+            return fn(client)
+
+        except Exception as e:
+            last_error = e
+            print(f"Key {idx+1} failed:", e)
+
+    st.error("🚫 AI service is busy or unavailable. Please try again later.")
+    print("All keys failed:", last_error)
+    return None
 
 
 # ---------------- INPUTS ----------------
@@ -100,18 +110,8 @@ add_audio = st.checkbox("Generate audio of full story")
 
 
 # ---------------- HELPERS ----------------
-def safe_run(fn, user_msg="Something went wrong."):
-    try:
-        return fn()
-    except Exception as e:
-        st.warning(user_msg)
-        print("Error:", e)
-        return None
-
-
 def map_voice(v):
     return "Charon" if "Male" in v else "Kore"
-
 
 def map_language_code(lang):
     return {"English": "en-US", "Hindi": "hi-IN", "Bhojpuri": "hi-IN"}.get(lang, "en-US")
@@ -120,54 +120,53 @@ def map_language_code(lang):
 # ---------------- PDF ----------------
 def generate_pdf_reportlab(text, title="AI Roleplay Story"):
 
-    def _gen():
-        buf = io.BytesIO()
+    buf = io.BytesIO()
 
-        pdfmetrics.registerFont(TTFont("Latin", "NotoSans-Regular.ttf"))
-        pdfmetrics.registerFont(TTFont("Deva", "NotoSansDevanagari-Regular.ttf"))
+    pdfmetrics.registerFont(TTFont("Latin", "NotoSans-Regular.ttf"))
+    pdfmetrics.registerFont(TTFont("Deva", "NotoSansDevanagari-Regular.ttf"))
 
-        doc = SimpleDocTemplate(buf, pagesize=A4)
-        styles = getSampleStyleSheet()
-        styles.add(ParagraphStyle(name="Latin", fontName="Latin", fontSize=12))
-        styles.add(ParagraphStyle(name="Deva", fontName="Deva", fontSize=12))
+    doc = SimpleDocTemplate(buf, pagesize=A4)
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="Latin", fontName="Latin", fontSize=12))
+    styles.add(ParagraphStyle(name="Deva", fontName="Deva", fontSize=12))
 
-        def is_deva(t):
-            return bool(re.search(r'[\u0900-\u097F]', t))
+    def is_deva(t):
+        return bool(re.search(r'[\u0900-\u097F]', t))
 
-        story = [Paragraph(title, styles["Latin"]), Spacer(1, 12)]
+    story = [Paragraph(title, styles["Latin"]), Spacer(1, 12)]
 
-        for line in text.split("\n"):
-            if line.strip():
-                style = styles["Deva"] if is_deva(line) else styles["Latin"]
-                story.append(Paragraph(line, style))
-                story.append(Spacer(1, 6))
+    for line in text.split("\n"):
+        if line.strip():
+            style = styles["Deva"] if is_deva(line) else styles["Latin"]
+            story.append(Paragraph(line, style))
+            story.append(Spacer(1, 6))
 
-        doc.build(story)
-        buf.seek(0)
-        return buf
-
-    return safe_run(_gen, "⚠️ PDF could not be generated.")
+    doc.build(story)
+    buf.seek(0)
+    return buf
 
 
 # ---------------- STORY GENERATION ----------------
 if st.button("Generate Story"):
-    if not client:
-        st.info("⚠️ AI service unavailable.")
+    if not clients:
+        st.error("⚠️ AI service unavailable.")
     else:
         with st.spinner("✨ Creating your story..."):
 
-            def _story():
+            def generate_story(client):
                 prompt = (
                     f"Write a {length} {genre} roleplay story in {language} ONLY. "
                     f"Introduce characters first ({characters})."
                 )
+
                 resp = client.models.generate_content(
                     model=GEMMA_MODEL,
                     contents=[prompt]
                 )
+
                 return resp.text
 
-            story = safe_run(_story, "⚠️ Story generation failed.")
+            story = call_with_key_rotation(generate_story)
 
             if story:
                 st.session_state["story"] = story
@@ -180,8 +179,8 @@ if "story" in st.session_state:
     st.write(st.session_state["story"])
 
     pdf = generate_pdf_reportlab(st.session_state["story"], "My AI Roleplay")
-    if pdf:
-        st.download_button("Download Story PDF", pdf, "story.pdf", "application/pdf")
+
+    st.download_button("Download Story PDF", pdf, "story.pdf", "application/pdf")
 
 
 # ---------------- AUDIO HELPERS ----------------
@@ -242,10 +241,11 @@ def convert_to_wav(audio_data: bytes, mime_type: str) -> bytes:
 
 
 # ---------------- AUDIO ----------------
-if add_audio and "story" in st.session_state and client:
+if add_audio and "story" in st.session_state and clients:
+
     with st.spinner("🔊 Generating audio..."):
 
-        def _audio():
+        def generate_audio(client):
 
             config = types.GenerateContentConfig(
                 response_modalities=["AUDIO"],
@@ -298,7 +298,7 @@ if add_audio and "story" in st.session_state and client:
 
             return combined_audio
 
-        audio = safe_run(_audio, "⚠️ Audio could not be generated.")
+        audio = call_with_key_rotation(generate_audio)
 
         if audio:
             st.audio(audio)
