@@ -1,6 +1,7 @@
 import streamlit as st
 import io
 import re
+import random
 import struct
 from google import genai
 from google.genai import types
