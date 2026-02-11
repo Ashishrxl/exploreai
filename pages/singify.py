@@ -1,6 +1,7 @@
 import streamlit as st
 import base64
 import tempfile
+import random
 import io
 import asyncio
 import soundfile as sf
@@ -68,6 +69,8 @@ api_keys = [
     st.secrets["KEY_10"],
     st.secrets["KEY_11"],
 ]
+
+random.shuffle(api_keys)
 
 # ---------------- Session State ----------------
 if 'transcript' not in st.session_state:
