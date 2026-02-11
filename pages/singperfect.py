@@ -60,7 +60,7 @@ for i in range(1, 12):  # supports up to 50 keys safely
     if key_name in st.secrets:
         api_keys.append(st.secrets[key_name])
 
-random.shuffle(api_keys)
+        random.shuffle(api_keys)
 
 if not api_keys:
     st.warning("🔑 AI service is not configured. Please contact the app administrator.")
