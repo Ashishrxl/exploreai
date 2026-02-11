@@ -116,7 +116,7 @@ def get_all_api_keys():
         if k:
             keys.append(k)
             
-    return random.shuffle(api_keys)
+    return random.shuffle(keys)
 
 
 # -------- SUMMARIZE WITH KEY ROTATION --------
