@@ -63,8 +63,36 @@ if not api_keys:
     st.warning("🔑 API keys are not configured yet. Please add them in Streamlit Secrets.")
     st.stop()
 
-selected_key_name = st.selectbox("Select Key", list(api_keys.keys()))
-api_key = api_keys[selected_key_name]
+selected_key_name = st.selectbox("Select Key (priority order)", list(api_keys.keys()))
+selected_key = api_keys[selected_key_name]
+
+# Create ordered key list (selected first, then others)
+ordered_keys = [selected_key] + [v for k, v in api_keys.items() if v != selected_key]
+
+# ==============================
+# Gemini key rotation helper
+# ==============================
+def generate_with_key_rotation(model, contents, config=None):
+    last_error = None
+
+    for key in ordered_keys:
+        try:
+            client = genai.Client(api_key=key)
+
+            response = client.models.generate_content(
+                model=model,
+                contents=contents,
+                config=config
+            )
+            return response
+
+        except Exception as e:
+            last_error = e
+            continue
+
+    st.error("⚠️ All AI service keys are temporarily unavailable. Please try again later.")
+    return None
+
 
 # ==============================
 # Utility functions
@@ -135,22 +163,6 @@ def save_tts_bytes(path, part, pcm_bytes):
             f.write(pcm_bytes)
 
 # ==============================
-# Gemini client (safe)
-# ==============================
-@st.cache_resource
-def get_gemini_client():
-    try:
-        return genai.Client(api_key=api_key)
-    except Exception:
-        return None
-
-client = get_gemini_client()
-
-if client is None:
-    st.warning("🤖 AI service is temporarily unavailable. Please try another API key.")
-    st.stop()
-
-# ==============================
 # Step 1: Feedback options
 # ==============================
 st.header("⚙️ Step 1: Choose Feedback Options")
@@ -184,9 +196,9 @@ if ref_file and not st.session_state.lyrics_text:
                 f.write(ref_file.read())
             st.session_state.ref_tmp_path = tmp_path
 
-            response = client.models.generate_content(
-                model=sttmodel,
-                contents=[{
+            response = generate_with_key_rotation(
+                sttmodel,
+                [{
                     "role": "user",
                     "parts": [
                         {"text": "Extract the complete lyrics from this song and return only the text."},
@@ -194,7 +206,10 @@ if ref_file and not st.session_state.lyrics_text:
                     ]
                 }]
             )
-            st.session_state.lyrics_text = response.candidates[0].content.parts[0].text.strip()
+
+            if response:
+                st.session_state.lyrics_text = response.candidates[0].content.parts[0].text.strip()
+
         except Exception:
             st.warning("🎼 Couldn't extract lyrics automatically. You can still sing along by ear.")
             st.session_state.lyrics_text = ""
@@ -246,9 +261,9 @@ if st.session_state.ref_tmp_path and recorded_file_path:
     st.subheader("💬 AI Vocal Feedback")
 
     try:
-        response = client.models.generate_content(
-            model=sttmodel,
-            contents=[{
+        response = generate_with_key_rotation(
+            sttmodel,
+            [{
                 "role": "user",
                 "parts": [
                     {"text": "You are a professional vocal coach. Give supportive feedback."},
@@ -257,7 +272,12 @@ if st.session_state.ref_tmp_path and recorded_file_path:
                 ]
             }]
         )
-        feedback_text = response.candidates[0].content.parts[0].text
+
+        if response:
+            feedback_text = response.candidates[0].content.parts[0].text
+        else:
+            feedback_text = "Great effort! Keep practicing your pitch, rhythm, and expression."
+
     except Exception:
         feedback_text = "Great effort! Keep practicing your pitch, rhythm, and expression."
 
@@ -278,18 +298,22 @@ if st.session_state.ref_tmp_path and recorded_file_path:
                     )
                 )
 
-                response = client.models.generate_content(
-                    model=ttsmodel,
-                    contents=f"Speak warmly: {feedback_text}",
-                    config=config
+                response = generate_with_key_rotation(
+                    ttsmodel,
+                    f"Speak warmly: {feedback_text}",
+                    config
                 )
 
-                part = response.candidates[0].content.parts[0]
-                pcm_data = part.inline_data.data
-                tts_path = tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name
-                save_tts_bytes(tts_path, part, pcm_data)
-                st.audio(tts_path)
-                st.success("✅ Audio feedback ready!")
+                if response:
+                    part = response.candidates[0].content.parts[0]
+                    pcm_data = part.inline_data.data
+                    tts_path = tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name
+                    save_tts_bytes(tts_path, part, pcm_data)
+                    st.audio(tts_path)
+                    st.success("✅ Audio feedback ready!")
+                else:
+                    st.info("🔊 Audio feedback is unavailable right now, but the text feedback is complete.")
+
             except Exception:
                 st.info("🔊 Audio feedback is unavailable right now, but the text feedback is complete.")
 
