@@ -1,5 +1,6 @@
 import streamlit as st
 from google import genai
+import random
 from google.genai import types
 import wave
 from io import BytesIO
@@ -114,7 +115,8 @@ def get_all_api_keys():
         k = st.secrets.get(f"KEY_{i}")
         if k:
             keys.append(k)
-    return keys
+            
+    return random.shuffle(api_keys)
 
 
 # -------- SUMMARIZE WITH KEY ROTATION --------
