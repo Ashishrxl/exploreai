@@ -41,8 +41,6 @@ footer {visibility: hidden;}
 a[href^="https://github.com"] {display: none !important;}
 a[href^="https://streamlit.io"] {display: none !important;}
 
-/* The following specifically targets and hides all child elements of the header's right side,
-   while preserving the header itself and, by extension, the sidebar toggle button. */
 header > div:nth-child(2) {
     display: none;
 }
@@ -56,22 +54,20 @@ st.caption("Record or upload a line → Transcribe → Sing 🎶")
 
 sttmodel = "gemini-2.5-flash"
 
-# --- API Key selection ---
-api_keys = {
-    "Key 1": st.secrets["KEY_1"],
-    "Key 2": st.secrets["KEY_2"],
-    "Key 3": st.secrets["KEY_3"],
-    "Key 4": st.secrets["KEY_4"],
-    "Key 5": st.secrets["KEY_5"],
-    "Key 6": st.secrets["KEY_6"],
-    "Key 7": st.secrets["KEY_7"],
-    "Key 8": st.secrets["KEY_8"],
-    "Key 9": st.secrets["KEY_9"],
-    "Key 10": st.secrets["KEY_10"],
-    "Key 11": st.secrets["KEY_11"],
-}
-selected_key_name = st.selectbox("Select Key", list(api_keys.keys()))
-api_key = api_keys[selected_key_name]
+# --- API Keys List ---
+api_keys = [
+    st.secrets["KEY_1"],
+    st.secrets["KEY_2"],
+    st.secrets["KEY_3"],
+    st.secrets["KEY_4"],
+    st.secrets["KEY_5"],
+    st.secrets["KEY_6"],
+    st.secrets["KEY_7"],
+    st.secrets["KEY_8"],
+    st.secrets["KEY_9"],
+    st.secrets["KEY_10"],
+    st.secrets["KEY_11"],
+]
 
 # ---------------- Session State ----------------
 if 'transcript' not in st.session_state:
@@ -152,42 +148,42 @@ with tab2:
         st.audio(tmp_path)
 
 # -------------------------
-# Friendly TTS
+# Friendly TTS (Auto Key Rotation)
 # -------------------------
 async def synthesize_speech(text_prompt, voice_name="Kore"):
-    try:
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
-        headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
 
-        data = {
-            "contents": [{"parts": [{"text": text_prompt}]}],
-            "generationConfig": {
-                "responseModalities": ["AUDIO"],
-                "speechConfig": {
-                    "voiceConfig": {
-                        "prebuiltVoiceConfig": {"voiceName": voice_name}
+    for key in api_keys:
+        try:
+            headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
+
+            data = {
+                "contents": [{"parts": [{"text": text_prompt}]}],
+                "generationConfig": {
+                    "responseModalities": ["AUDIO"],
+                    "speechConfig": {
+                        "voiceConfig": {
+                            "prebuiltVoiceConfig": {"voiceName": voice_name}
+                        }
                     }
                 }
             }
-        }
 
-        loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(
-            None, lambda: requests.post(url, headers=headers, json=data)
-        )
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None, lambda: requests.post(url, headers=headers, json=data)
+            )
 
-        if response.status_code != 200:
-            st.warning("⚠️ Voice generation is temporarily unavailable. Please try again shortly.")
-            return None
+            if response.status_code == 200:
+                audio_base64 = response.json()["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
+                return base64.b64decode(audio_base64)
 
-        audio_base64 = response.json()["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
-        return base64.b64decode(audio_base64)
+        except Exception:
+            continue
 
-    except Exception:
-        st.warning("⚠️ Something went wrong while creating the singing voice.")
-        return None
+    st.error("❌ All voice generation servers are busy or unavailable. Please try again later.")
+    return None
 
-# -------------------------
 
 # -------------------------
 # PCM → WAV Converter
@@ -208,38 +204,52 @@ def pcm_to_wav(pcm_bytes, sample_rate=24000, channels=1, sample_width=2):
     except Exception:
         st.warning("⚠️ Failed to convert generated audio.")
         return None
-# Transcribe & Sing
+
+
+# -------------------------
+# Transcribe & Sing (Auto Key Rotation)
 # -------------------------
 async def transcribe_and_sing():
     if not st.session_state.original_path:
         st.warning("⚠️ Please upload or record audio first.")
         return
 
-    client = genai.Client(api_key=api_key)
     audio_path = st.session_state.original_path
 
-    try:
-        with open(audio_path, "rb") as f:
-            audio_data = f.read()
+    with open(audio_path, "rb") as f:
+        audio_data = f.read()
 
-        resp = client.models.generate_content(
-            model=sttmodel,
-            contents=[{
-                "role": "user",
-                "parts": [
-                    {"text": "Please transcribe this speech accurately."},
-                    {"inline_data": {"mime_type": "audio/wav", "data": base64.b64encode(audio_data).decode()}}
-                ]
-            }]
-        )
+    transcript = None
 
-        transcript = resp.text.strip()
-        st.session_state.transcript = transcript
+    # ---- STT Key Rotation ----
+    for key in api_keys:
+        try:
+            client = genai.Client(api_key=key)
 
-    except Exception:
-        st.warning("⚠️ We couldn’t understand the audio clearly. Try speaking louder or slower.")
+            resp = client.models.generate_content(
+                model=sttmodel,
+                contents=[{
+                    "role": "user",
+                    "parts": [
+                        {"text": "Please transcribe this speech accurately."},
+                        {"inline_data": {"mime_type": "audio/wav", "data": base64.b64encode(audio_data).decode()}}
+                    ]
+                }]
+            )
+
+            transcript = resp.text.strip()
+            break
+
+        except Exception:
+            continue
+
+    if transcript is None:
+        st.error("❌ We couldn’t transcribe the audio right now. All servers seem busy. Please try again later.")
         return
 
+    st.session_state.transcript = transcript
+
+    # ---- TTS ----
     tts_prompt = f"Sing these words in a {singing_style.lower()} style: {transcript}"
     pcm = await synthesize_speech(tts_prompt, voice_option)
 
@@ -249,6 +259,7 @@ async def transcribe_and_sing():
     wav_bytes = pcm_to_wav(pcm)
     if wav_bytes is None:
         return
+
     out_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
     with open(out_file.name, "wb") as f:
         f.write(wav_bytes)
@@ -257,6 +268,7 @@ async def transcribe_and_sing():
     st.session_state.generation_complete = True
     st.session_state.current_style = singing_style
     st.session_state.current_voice = voice_option
+
 
 # -------------------------
 # Main Button
