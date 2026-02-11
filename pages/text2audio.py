@@ -93,6 +93,7 @@ for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
+
 # Helper: Save PCM as WAV
 def save_wave_file(pcm_data, channels=1, rate=24000, sample_width=2):
     buffer = BytesIO()
@@ -103,6 +104,7 @@ def save_wave_file(pcm_data, channels=1, rate=24000, sample_width=2):
         wf.writeframes(pcm_data)
     buffer.seek(0)
     return buffer
+
 
 # Extract text from uploaded file
 def extract_text_from_file(uploaded_file):
@@ -129,11 +131,30 @@ def extract_text_from_file(uploaded_file):
         )
         return None
 
-# Summarize text using Gemini
-def summarize_text(text, api_key, max_words=3500):
-    try:
-        client = genai.Client(api_key=api_key)
-        prompt = f"""
+
+# -------- API KEY ROTATION HELPER --------
+def get_ordered_api_keys(api_keys_dict, selected_key_name):
+    keys = []
+
+    if api_keys_dict.get(selected_key_name):
+        keys.append(api_keys_dict[selected_key_name])
+
+    for k, v in api_keys_dict.items():
+        if k != selected_key_name and v:
+            keys.append(v)
+
+    return [k for k in keys if k]
+
+
+# -------- SUMMARIZE WITH KEY ROTATION --------
+def summarize_text(text, api_keys_list, max_words=3500):
+    last_error = None
+
+    for key in api_keys_list:
+        try:
+            client = genai.Client(api_key=key)
+
+            prompt = f"""
 Please provide a comprehensive summary of the following text.
 Keep it under {max_words} words.
 
@@ -141,67 +162,76 @@ TEXT:
 {text}
 SUMMARY:
 """
-        response = client.models.generate_content(
-            model=textmodel,
-            contents=prompt
-        )
-        return response.text
-    except Exception:
-        st.warning(
-            "🤖 We ran into an issue while summarizing your text.\n\n"
-            "You can try again, shorten the text, or switch to another API key."
-        )
-        return None
 
-# Generate audio using Gemini TTS
-def generate_audio_tts(text, api_key, voice_name='Kore', speaking_style=''):
-    try:
-        client = genai.Client(api_key=api_key)
-        prompt = f"{speaking_style}: {text}" if speaking_style else text
+            response = client.models.generate_content(
+                model=textmodel,
+                contents=prompt
+            )
 
-        response = client.models.generate_content(
-            model=ttsmodel,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_modalities=["AUDIO"],
-                speech_config=types.SpeechConfig(
-                    voice_config=types.VoiceConfig(
-                        prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                            voice_name=voice_name,
-                        )
-                    ),
+            if response and response.text:
+                return response.text
+
+        except Exception as e:
+            last_error = e
+            continue
+
+    st.warning(
+        "🤖 All API keys failed while summarizing your text.\n\n"
+        "Please try again later or add more working keys."
+    )
+    return None
+
+
+# -------- TTS WITH KEY ROTATION --------
+def generate_audio_tts(text, api_keys_list, voice_name='Kore', speaking_style=''):
+    last_error = None
+
+    for key in api_keys_list:
+        try:
+            client = genai.Client(api_key=key)
+            prompt = f"{speaking_style}: {text}" if speaking_style else text
+
+            response = client.models.generate_content(
+                model=ttsmodel,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_modalities=["AUDIO"],
+                    speech_config=types.SpeechConfig(
+                        voice_config=types.VoiceConfig(
+                            prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                voice_name=voice_name,
+                            )
+                        ),
+                    )
                 )
             )
-        )
 
-        if (
-            hasattr(response, "candidates")
-            and response.candidates
-            and response.candidates[0].content
-            and response.candidates[0].content.parts
-        ):
-            audio_part = response.candidates[0].content.parts[0]
-            if hasattr(audio_part, "inline_data") and audio_part.inline_data.data:
-                b64_data = audio_part.inline_data.data
+            if (
+                hasattr(response, "candidates")
+                and response.candidates
+                and response.candidates[0].content
+                and response.candidates[0].content.parts
+            ):
+                audio_part = response.candidates[0].content.parts[0]
+                if hasattr(audio_part, "inline_data") and audio_part.inline_data.data:
+                    b64_data = audio_part.inline_data.data
 
-                if isinstance(b64_data, bytes):
-                    return b64_data
-                elif isinstance(b64_data, str):
-                    b64_data += "=" * (-len(b64_data) % 4)
-                    return base64.b64decode(b64_data)
+                    if isinstance(b64_data, bytes):
+                        return b64_data
+                    elif isinstance(b64_data, str):
+                        b64_data += "=" * (-len(b64_data) % 4)
+                        return base64.b64decode(b64_data)
 
-        st.warning(
-            "🔇 The audio service didn’t return any sound.\n\n"
-            "This can happen if the text is empty, too long, or the API key hit a limit."
-        )
-        return None
+        except Exception as e:
+            last_error = e
+            continue
 
-    except Exception:
-        st.warning(
-            "🎧 We couldn’t generate the audio this time.\n\n"
-            "Please try again, switch voices, or use a different API key."
-        )
-        return None
+    st.warning(
+        "🎧 All API keys failed while generating audio.\n\n"
+        "Please try again later or add more working keys."
+    )
+    return None
+
 
 def main():
     st.title("🎙️ Text-to-Audio Converter")
@@ -217,8 +247,11 @@ def main():
             f"Key {i}": st.secrets.get(f"KEY_{i}")
             for i in range(1, 12)
         }
+
         selected_key_name = st.selectbox("Select Key", list(api_keys.keys()))
-        api_key = api_keys[selected_key_name]
+
+        # Build ordered key list
+        ordered_keys = get_ordered_api_keys(api_keys, selected_key_name)
 
         st.markdown("---")
         st.subheader("🎵 Voice Options")
@@ -293,7 +326,7 @@ def main():
     with col2:
         st.header("🔊 Generate Audio")
 
-        if api_key and st.session_state.text_confirmed and st.session_state.input_text:
+        if ordered_keys and st.session_state.text_confirmed and st.session_state.input_text:
             txt = st.session_state.input_text
             wc = len(txt.split())
             needs_summary = wc > MAX_WORDS_FOR_TTS
@@ -303,7 +336,7 @@ def main():
 
                 if needs_summary:
                     with st.spinner("Summarizing long text…"):
-                        summary = summarize_text(txt, api_key, MAX_WORDS_FOR_TTS)
+                        summary = summarize_text(txt, ordered_keys, MAX_WORDS_FOR_TTS)
                     if summary:
                         use_text = summary
                         st.success("Summary ready!")
@@ -311,7 +344,12 @@ def main():
                         st.warning("⚠️ Using original text instead.")
 
                 with st.spinner("Creating audio…"):
-                    audio_data = generate_audio_tts(use_text, api_key, selected_voice, speaking_style)
+                    audio_data = generate_audio_tts(
+                        use_text,
+                        ordered_keys,
+                        selected_voice,
+                        speaking_style
+                    )
 
                 if audio_data:
                     audio_buf = save_wave_file(audio_data)
@@ -325,6 +363,7 @@ def main():
                     )
         else:
             st.info("👈 Please upload or type text first, then confirm it.")
+
 
 if __name__ == "__main__":
     main()
