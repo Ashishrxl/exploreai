@@ -116,11 +116,12 @@ def get_all_api_keys():
         if k:
             keys.append(k)
             
-    return random.shuffle(keys)
+    return keys
 
 
 # -------- SUMMARIZE WITH KEY ROTATION --------
 def summarize_text(text, api_keys_list, max_words=3500):
+    random.shuffle(api_keys_list)
 
     for key in api_keys_list:
         try:
@@ -152,6 +153,7 @@ SUMMARY:
 
 # -------- TTS WITH KEY ROTATION --------
 def generate_audio_tts(text, api_keys_list, voice_name='Kore', speaking_style=''):
+    random.shuffle(api_keys_list)
 
     for key in api_keys_list:
         try:
