@@ -47,27 +47,6 @@ header > div:nth-child(2) { display: none; }
     padding: 0.75rem;
     font-size: 1.1rem;
 }
-.success-box {
-    padding: 1rem;
-    background-color: #d4edda;
-    border: 1px solid #c3e6cb;
-    border-radius: 0.25rem;
-    color: #155724;
-}
-.warning-box {
-    padding: 1rem;
-    background-color: #fff3cd;
-    border: 1px solid #ffeaa7;
-    border-radius: 0.25rem;
-    color: #856404;
-}
-.info-box {
-    padding: 1rem;
-    background-color: #d1ecf1;
-    border: 1px solid #bee5eb;
-    border-radius: 0.25rem;
-    color: #0c5460;
-}
 </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
@@ -121,34 +100,25 @@ def extract_text_from_file(uploaded_file):
             doc = docx.Document(BytesIO(uploaded_file.read()))
             return " ".join(p.text for p in doc.paragraphs)
         else:
-            st.warning("⚠️ This file type isn’t supported yet. Please upload TXT, PDF, or DOCX.")
+            st.warning("⚠️ This file type isn’t supported yet.")
             return None
     except Exception:
-        st.warning(
-            "😕 We couldn’t read this file.\n\n"
-            "• Make sure it’s not corrupted\n"
-            "• Try exporting it again or uploading a different format"
-        )
+        st.warning("😕 Could not read this file.")
         return None
 
 
-# -------- API KEY ROTATION HELPER --------
-def get_ordered_api_keys(api_keys_dict, selected_key_name):
+# -------- GET ALL KEYS AUTOMATICALLY --------
+def get_all_api_keys():
     keys = []
-
-    if api_keys_dict.get(selected_key_name):
-        keys.append(api_keys_dict[selected_key_name])
-
-    for k, v in api_keys_dict.items():
-        if k != selected_key_name and v:
-            keys.append(v)
-
-    return [k for k in keys if k]
+    for i in range(1, 12):
+        k = st.secrets.get(f"KEY_{i}")
+        if k:
+            keys.append(k)
+    return keys
 
 
 # -------- SUMMARIZE WITH KEY ROTATION --------
 def summarize_text(text, api_keys_list, max_words=3500):
-    last_error = None
 
     for key in api_keys_list:
         try:
@@ -171,20 +141,15 @@ SUMMARY:
             if response and response.text:
                 return response.text
 
-        except Exception as e:
-            last_error = e
+        except Exception:
             continue
 
-    st.warning(
-        "🤖 All API keys failed while summarizing your text.\n\n"
-        "Please try again later or add more working keys."
-    )
+    st.warning("🤖 All API keys failed while summarizing.")
     return None
 
 
 # -------- TTS WITH KEY ROTATION --------
 def generate_audio_tts(text, api_keys_list, voice_name='Kore', speaking_style=''):
-    last_error = None
 
     for key in api_keys_list:
         try:
@@ -222,14 +187,10 @@ def generate_audio_tts(text, api_keys_list, voice_name='Kore', speaking_style=''
                         b64_data += "=" * (-len(b64_data) % 4)
                         return base64.b64decode(b64_data)
 
-        except Exception as e:
-            last_error = e
+        except Exception:
             continue
 
-    st.warning(
-        "🎧 All API keys failed while generating audio.\n\n"
-        "Please try again later or add more working keys."
-    )
+    st.warning("🎧 All API keys failed while generating audio.")
     return None
 
 
@@ -239,21 +200,9 @@ def main():
     st.markdown("---")
 
     MAX_WORDS_FOR_TTS = 4000
+    api_keys = get_all_api_keys()
 
     with st.expander("⚙️ Settings", expanded=False):
-        st.header("Configuration")
-
-        api_keys = {
-            f"Key {i}": st.secrets.get(f"KEY_{i}")
-            for i in range(1, 12)
-        }
-
-        selected_key_name = st.selectbox("Select Key", list(api_keys.keys()))
-
-        # Build ordered key list
-        ordered_keys = get_ordered_api_keys(api_keys, selected_key_name)
-
-        st.markdown("---")
         st.subheader("🎵 Voice Options")
 
         voice_options = {
@@ -280,8 +229,6 @@ def main():
             placeholder="e.g., calm, confident, conversational"
         )
 
-        st.info("💡 Supports TXT, PDF, DOCX\nLong texts are summarized automatically")
-
     col1, col2 = st.columns(2)
 
     with col1:
@@ -291,62 +238,45 @@ def main():
         with tab1:
             uploaded = st.file_uploader("Upload a file", type=["txt", "pdf", "docx", "doc"])
             if uploaded:
-                with st.spinner("Reading your file…"):
-                    extracted = extract_text_from_file(uploaded)
+                extracted = extract_text_from_file(uploaded)
                 if extracted:
                     st.session_state.input_text = extracted
                     st.session_state.text_confirmed = True
-                    wc = len(extracted.split())
-                    st.text_area("Preview", extracted[:2000], height=300, disabled=True)
-                    st.caption(f"📊 Word count: {wc}")
-                    if wc > MAX_WORDS_FOR_TTS:
-                        st.warning("⚠️ This text is long and will be summarized automatically.")
 
         with tab2:
-            if st.session_state.text_confirmed and st.session_state.input_text and not uploaded:
-                wc = len(st.session_state.input_text.split())
-                st.success(f"✅ Text confirmed ({wc} words)")
-                if st.button("✏️ Edit text"):
-                    st.session_state.text_confirmed = False
-                    st.session_state.input_text = ""
-                    st.rerun()
-            else:
-                with st.form("text_form"):
-                    text_input = st.text_area("Paste or type text here", height=300)
-                    submitted = st.form_submit_button("Confirm text")
-                if submitted:
-                    if text_input.strip():
-                        st.session_state.input_text = text_input
-                        st.session_state.text_confirmed = True
-                        st.success("Text confirmed! You can generate audio now ➡️")
-                        st.rerun()
-                    else:
-                        st.warning("✋ Please enter some text before continuing.")
+            with st.form("text_form"):
+                text_input = st.text_area("Paste or type text here", height=300)
+                submitted = st.form_submit_button("Confirm text")
+            if submitted and text_input.strip():
+                st.session_state.input_text = text_input
+                st.session_state.text_confirmed = True
+                st.rerun()
 
     with col2:
         st.header("🔊 Generate Audio")
 
-        if ordered_keys and st.session_state.text_confirmed and st.session_state.input_text:
+        if api_keys and st.session_state.text_confirmed and st.session_state.input_text:
+
             txt = st.session_state.input_text
             wc = len(txt.split())
             needs_summary = wc > MAX_WORDS_FOR_TTS
 
             if st.button("🎵 Convert to Audio"):
+
                 use_text = txt
 
                 if needs_summary:
                     with st.spinner("Summarizing long text…"):
-                        summary = summarize_text(txt, ordered_keys, MAX_WORDS_FOR_TTS)
+                        summary = summarize_text(txt, api_keys, MAX_WORDS_FOR_TTS)
+
                     if summary:
                         use_text = summary
                         st.success("Summary ready!")
-                    else:
-                        st.warning("⚠️ Using original text instead.")
 
                 with st.spinner("Creating audio…"):
                     audio_data = generate_audio_tts(
                         use_text,
-                        ordered_keys,
+                        api_keys,
                         selected_voice,
                         speaking_style
                     )
@@ -354,6 +284,7 @@ def main():
                 if audio_data:
                     audio_buf = save_wave_file(audio_data)
                     st.audio(audio_buf, format="audio/wav")
+
                     ts = time.strftime("%Y%m%d-%H%M%S")
                     st.download_button(
                         "⬇️ Download audio",
@@ -361,8 +292,9 @@ def main():
                         file_name=f"audio_{ts}.wav",
                         mime="audio/wav"
                     )
+
         else:
-            st.info("👈 Please upload or type text first, then confirm it.")
+            st.info("👈 Please upload or type text first.")
 
 
 if __name__ == "__main__":
