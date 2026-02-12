@@ -61,6 +61,7 @@ try:
         if f"KEY_{i}" in st.secrets
     ]
     random.shuffle(api_keys)
+
     if not api_keys:
         st.error("⚠️ No API keys configured.")
     else:
@@ -78,13 +79,11 @@ def call_with_key_rotation(fn):
     for idx, client in enumerate(clients):
         try:
             return fn(client)
-
         except Exception as e:
             last_error = e
             print(f"Key {idx+1} failed:", e)
 
-    st.error("🚫 AI service is busy or unavailable. Please try again later.")
-    print("All keys failed:", last_error)
+    st.error("🚫 AI service is busy or unavailable.")
     return None
 
 
@@ -106,8 +105,17 @@ voice_options = {
     "Hindi": ["Hindi Male", "Hindi Female"],
     "Bhojpuri": ["Bhojpuri Male", "Bhojpuri Female"]
 }
+
 voice_choice = st.selectbox("Select voice", voice_options[language])
-add_audio = st.checkbox("Generate audio of full story")
+add_audio = st.checkbox("Enable Audio Option")
+
+
+# ---------------- SESSION STORAGE ----------------
+if "story" not in st.session_state:
+    st.session_state["story"] = None
+
+if "audio" not in st.session_state:
+    st.session_state["audio"] = None
 
 
 # ---------------- HELPERS ----------------
@@ -128,6 +136,7 @@ def generate_pdf_reportlab(text, title="AI Roleplay Story"):
 
     doc = SimpleDocTemplate(buf, pagesize=A4)
     styles = getSampleStyleSheet()
+
     styles.add(ParagraphStyle(name="Latin", fontName="Latin", fontSize=12))
     styles.add(ParagraphStyle(name="Deva", fontName="Deva", fontSize=12))
 
@@ -149,9 +158,9 @@ def generate_pdf_reportlab(text, title="AI Roleplay Story"):
 
 # ---------------- STORY GENERATION ----------------
 if st.button("Generate Story"):
-    if not clients:
-        st.error("⚠️ AI service unavailable.")
-    else:
+
+    if clients:
+
         with st.spinner("✨ Creating your story..."):
 
             def generate_story(client):
@@ -171,26 +180,37 @@ if st.button("Generate Story"):
 
             if story:
                 st.session_state["story"] = story
+                st.session_state["audio"] = None  # Reset old audio
                 st.toast("📖 Story ready!", icon="✅")
 
 
 # ---------------- DISPLAY STORY ----------------
-if "story" in st.session_state:
+if st.session_state["story"]:
+
     st.subheader("Story Script")
     st.write(st.session_state["story"])
 
     pdf = generate_pdf_reportlab(st.session_state["story"], "My AI Roleplay")
 
-    st.download_button("Download Story PDF", pdf, "story.pdf", "application/pdf")
+    st.download_button(
+        "Download Story PDF",
+        pdf,
+        "story.pdf",
+        "application/pdf",
+        key="download_pdf"
+    )
 
 
 # ---------------- AUDIO HELPERS ----------------
 def parse_audio_mime_type(mime_type: str):
+
     bits_per_sample = 16
     rate = 24000
 
     parts = mime_type.split(";")
+
     for param in parts:
+
         param = param.strip()
 
         if param.lower().startswith("rate="):
@@ -208,15 +228,17 @@ def parse_audio_mime_type(mime_type: str):
     return {"bits_per_sample": bits_per_sample, "rate": rate}
 
 
-def convert_to_wav(audio_data: bytes, mime_type: str) -> bytes:
+def convert_to_wav(audio_data: bytes, mime_type: str):
+
     params = parse_audio_mime_type(mime_type)
 
     bits_per_sample = params["bits_per_sample"]
     sample_rate = params["rate"]
-    num_channels = 1
 
+    num_channels = 1
     data_size = len(audio_data)
     bytes_per_sample = bits_per_sample // 8
+
     block_align = num_channels * bytes_per_sample
     byte_rate = sample_rate * block_align
     chunk_size = 36 + data_size
@@ -242,68 +264,83 @@ def convert_to_wav(audio_data: bytes, mime_type: str) -> bytes:
 
 
 # ---------------- AUDIO ----------------
-if add_audio and "story" in st.session_state and clients:
+if add_audio and st.session_state["story"] and clients:
 
-    with st.spinner("🔊 Generating audio..."):
+    if st.button("Generate Audio"):
 
-        def generate_audio(client):
+        with st.spinner("🔊 Generating audio..."):
 
-            config = types.GenerateContentConfig(
-                response_modalities=["AUDIO"],
-                speech_config=types.SpeechConfig(
-                    language_code=map_language_code(language),
-                    voice_config=types.VoiceConfig(
-                        prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                            voice_name=map_voice(voice_choice)
+            def generate_audio(client):
+
+                config = types.GenerateContentConfig(
+                    response_modalities=["AUDIO"],
+                    speech_config=types.SpeechConfig(
+                        language_code=map_language_code(language),
+                        voice_config=types.VoiceConfig(
+                            prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                voice_name=map_voice(voice_choice)
+                            )
                         )
                     )
                 )
-            )
 
-            contents = [
-                types.Content(
-                    role="user",
-                    parts=[types.Part.from_text(text=st.session_state["story"])]
-                )
-            ]
+                contents = [
+                    types.Content(
+                        role="user",
+                        parts=[types.Part.from_text(text=st.session_state["story"])]
+                    )
+                ]
 
-            audio_chunks = []
-            mime_type = None
+                audio_chunks = []
+                mime_type = None
 
-            for chunk in client.models.generate_content_stream(
-                model=TTS_MODEL,
-                contents=contents,
-                config=config
-            ):
-
-                if (
-                    chunk.candidates is None
-                    or chunk.candidates[0].content is None
-                    or chunk.candidates[0].content.parts is None
+                for chunk in client.models.generate_content_stream(
+                    model=TTS_MODEL,
+                    contents=contents,
+                    config=config
                 ):
-                    continue
 
-                part = chunk.candidates[0].content.parts[0]
+                    if (
+                        chunk.candidates is None
+                        or chunk.candidates[0].content is None
+                        or chunk.candidates[0].content.parts is None
+                    ):
+                        continue
 
-                if part.inline_data and part.inline_data.data:
-                    mime_type = part.inline_data.mime_type
-                    audio_chunks.append(part.inline_data.data)
+                    part = chunk.candidates[0].content.parts[0]
 
-            if not audio_chunks:
-                return None
+                    if part.inline_data and part.inline_data.data:
+                        mime_type = part.inline_data.mime_type
+                        audio_chunks.append(part.inline_data.data)
 
-            combined_audio = b"".join(audio_chunks)
+                if not audio_chunks:
+                    return None
 
-            if mime_type and "wav" not in mime_type.lower():
-                combined_audio = convert_to_wav(combined_audio, mime_type)
+                combined_audio = b"".join(audio_chunks)
 
-            return combined_audio
+                if mime_type and "wav" not in mime_type.lower():
+                    combined_audio = convert_to_wav(combined_audio, mime_type)
 
-        audio = call_with_key_rotation(generate_audio)
+                return combined_audio
 
-        if audio:
-            st.audio(audio)
-            st.download_button("Download Audio", audio, "story.wav", "audio/wav")
+            audio = call_with_key_rotation(generate_audio)
+
+            if audio:
+                st.session_state["audio"] = audio
+
+
+# ---------- Display Audio ----------
+if st.session_state["audio"]:
+
+    st.audio(st.session_state["audio"])
+
+    st.download_button(
+        "Download Audio",
+        st.session_state["audio"],
+        "story.wav",
+        "audio/wav",
+        key="download_audio"
+    )
 
 
 st.markdown("---")
