@@ -29,15 +29,18 @@ try:
 except Exception:
     pass
 
-st.markdown("""
+hide_streamlit_style = """
 <style>
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 [data-testid="stStatusWidget"] {display: none;}
 [data-testid="stToolbar"] {display: none;}
+a[href^="https://github.com"] {display: none !important;}
+a[href^="https://streamlit.io"] {display: none !important;}
+header > div:nth-child(2) { display: none; }
 </style>
-""", unsafe_allow_html=True)
-
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # --- Models ---
 ttsmodel = "gemini-2.5-flash-preview-tts"
 textmodel = "gemini-2.5-flash-lite"
