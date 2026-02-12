@@ -3,12 +3,51 @@ import streamlit as st
 # --- Page Config MUST be first ---
 st.set_page_config(page_title="VoiceVerse AI", layout="centered")
 
+# ⭐ NEW — STREAMLIT LINK CLICK BLOCKER (Added)
+st.markdown("""
+<style>
+
+/* Disable clicking Streamlit links */
+a[href*="streamlit.io"],
+a[href*="streamlit.app"] {
+    pointer-events: none !important;
+    cursor: default !important;
+}
+
+/* Disable floating mobile bottom bar clicking */
+div:has(a[href*="streamlit"]) {
+    pointer-events: none !important;
+}
+
+/* Extra protection */
+footer {
+    pointer-events: none !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+from streamlit.components.v1 import html
+
+html("""
+<script>
+setInterval(() => {
+    const links = window.top.document.querySelectorAll('a[href*="streamlit"]');
+    links.forEach(link => {
+        link.style.pointerEvents = "none";
+        link.onclick = (e) => e.preventDefault();
+    });
+}, 1000);
+</script>
+""", height=0)
+
+# -----------------------------
+
 from google import genai
 from google.genai import types
 import wave
 import random
 import base64
-from streamlit.components.v1 import html
 import logging
 
 logging.basicConfig(
@@ -46,34 +85,6 @@ header > div:nth-child(2) { display: none; }
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-
-st.markdown("""
-<style>
-iframe[title="streamlitAppViewContainer"] + div {
-    display:none !important;
-}
-
-div[data-testid="stDecoration"] {
-    display:none !important;
-}
-
-div[data-testid="stToolbar"] {
-    display:none !important;
-}
-
-button[title="View fullscreen"] {
-    display:none !important;
-}
-
-footer {
-    visibility:hidden;
-}
-
-header {
-    visibility:hidden;
-}
-</style>
-""", unsafe_allow_html=True)
 # --- Models ---
 ttsmodel = "gemini-2.5-flash-preview-tts"
 textmodel = "gemini-2.5-flash-lite"
@@ -246,4 +257,31 @@ if st.session_state.audio_file:
 
     st.success("🎉 Podcast ready!")
 
+# ---------------- UI CLEANUP ----------------
+try:
+    html(
+      """
+      <script>
+      try {
+        const sel = window.top.document.querySelectorAll('[href*="streamlit.io"], [href*="streamlit.app"]');
+        sel.forEach(e => e.style.display='none');
+      } catch(e) {}
+      </script>
+      """,
+      height=0
+    )
+except Exception as e:
+    print("HTML injection warning:", e)
 
+hide_streamlit_style = """
+<style>
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+[data-testid="stStatusWidget"] {display: none;}
+[data-testid="stToolbar"] {display: none;}
+a[href^="https://github.com"] {display: none !important;}
+a[href^="https://streamlit.io"] {display: none !important;}
+header > div:nth-child(2) { display: none; }
+</style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
