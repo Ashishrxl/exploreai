@@ -6,17 +6,7 @@ st.set_page_config(page_title="VoiceVerse AI", layout="centered")
 
 from streamlit.components.v1 import html
 
-html("""
-<script>
-setInterval(() => {
-    const links = window.top.document.querySelectorAll('a[href*="streamlit"]');
-    links.forEach(link => {
-        link.style.pointerEvents = "none";
-        link.onclick = (e) => e.preventDefault();
-    });
-}, 1000);
-</script>
-""", height=0)
+
 
 # -----------------------------
 
