@@ -46,30 +46,63 @@ div[data-testid="stAppViewBlockContainer"] > div:last-child {
     display: none !important;
 }
 
+/* Extra mobile safety */
+iframe { pointer-events: auto !important; }
+
 </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# --- Extra JS removal (handles dynamic injection) ---
+# --- Ultra Strong JS Removal ---
 html("""
 <script>
-function hideStreamlitBadges() {
-    const selectors = [
-        '[data-testid="stToolbar"]',
-        '[data-testid="stStatusWidget"]',
-        '[data-testid="stDecoration"]',
-        '[data-testid="stFloatingActionButton"]',
-        'button[kind="header"]',
-        'a[href*="streamlit.app"]',
-        'a[href*="streamlit.io"]'
-    ];
 
-    selectors.forEach(sel => {
-        document.querySelectorAll(sel).forEach(el => el.remove());
-    });
+function removeStreamlitBranding() {
+    try {
+
+        // Remove inside iframe
+        const iframeSelectors = [
+            '[data-testid="stToolbar"]',
+            '[data-testid="stStatusWidget"]',
+            '[data-testid="stDecoration"]',
+            '[data-testid="stFloatingActionButton"]',
+            'button[kind="header"]',
+            'a[href*="streamlit"]'
+        ];
+
+        iframeSelectors.forEach(sel => {
+            document.querySelectorAll(sel).forEach(el => el.remove());
+        });
+
+        // Remove Streamlit Cloud floating UI from parent DOM
+        if (window.parent) {
+            const parentDoc = window.parent.document;
+
+            const parentSelectors = [
+                'div[style*="position: fixed"]',
+                'a[href*="streamlit.app"]',
+                'button[aria-label*="Deploy"]',
+                'button[aria-label*="Open"]'
+            ];
+
+            parentSelectors.forEach(sel => {
+                parentDoc.querySelectorAll(sel).forEach(el => el.remove());
+            });
+        }
+
+    } catch(e) {}
 }
 
-setInterval(hideStreamlitBadges, 1000);
+// Run immediately
+removeStreamlitBranding();
+
+// Observe DOM changes
+const observer = new MutationObserver(() => removeStreamlitBranding());
+observer.observe(document, { childList: true, subtree: true });
+
+// Keep retrying
+setInterval(removeStreamlitBranding, 500);
+
 </script>
 """, height=0)
 
