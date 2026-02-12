@@ -205,10 +205,9 @@ def main():
     MAX_WORDS_FOR_TTS = 4000
     api_keys = get_all_api_keys()
 
-    with st.expander("⚙️ Settings", expanded=False):
-        st.subheader("🎵 Voice Options")
+    st.subheader("🎵 Voice Options")
 
-        voice_options = {
+    voice_options = {
             'Kore': 'Firm and clear',
             'Puck': 'Upbeat and energetic',
             'Zephyr': 'Bright and friendly',
@@ -221,13 +220,13 @@ def main():
             'Autonoe': 'Bright and articulate'
         }
 
-        selected_voice = st.selectbox(
+    selected_voice = st.selectbox(
             "Select Voice",
             options=list(voice_options.keys()),
             format_func=lambda x: f"{x} – {voice_options[x]}"
         )
 
-        speaking_style = st.text_input(
+    speaking_style = st.text_input(
             "🎭 Optional speaking style",
             placeholder="e.g., calm, confident, conversational"
         )
