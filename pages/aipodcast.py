@@ -17,94 +17,34 @@ logging.basicConfig(
     force=True
 )
 
-# --- Hide Streamlit UI elements (CSS) ---
+# ---------------- UI CLEANUP ----------------
+try:
+    html(
+      """
+      <script>
+      try {
+        const sel = window.top.document.querySelectorAll('[href*="streamlit.io"], [href*="streamlit.app"]');
+        sel.forEach(e => e.style.display='none');
+      } catch(e) {}
+      </script>
+      """,
+      height=0
+    )
+except Exception as e:
+    print("HTML injection warning:", e)
+
 hide_streamlit_style = """
 <style>
-
-/* Hide hamburger menu */
 #MainMenu {visibility: hidden;}
-
-/* Hide footer */
 footer {visibility: hidden;}
-
-/* Hide header */
-header {visibility: hidden;}
-
-/* Hide toolbar and status widgets */
-[data-testid="stToolbar"] {display: none !important;}
-[data-testid="stStatusWidget"] {display: none !important;}
-[data-testid="stDecoration"] {display: none !important;}
-[data-testid="stFloatingActionButton"] {display: none !important;}
-
-/* Hide streamlit badges */
-a[href*="streamlit.io"] {display: none !important;}
-a[href*="streamlit.app"] {display: none !important;}
-button[kind="header"] {display: none !important;}
-
-/* Hide bottom floating container */
-div[data-testid="stAppViewBlockContainer"] > div:last-child {
-    display: none !important;
-}
-
-/* Extra mobile safety */
-iframe { pointer-events: auto !important; }
-
+[data-testid="stStatusWidget"] {display: none;}
+[data-testid="stToolbar"] {display: none;}
+a[href^="https://github.com"] {display: none !important;}
+a[href^="https://streamlit.io"] {display: none !important;}
+header > div:nth-child(2) { display: none; }
 </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
-
-# --- Ultra Strong JS Removal ---
-html("""
-<script>
-
-function removeStreamlitBranding() {
-    try {
-
-        // Remove inside iframe
-        const iframeSelectors = [
-            '[data-testid="stToolbar"]',
-            '[data-testid="stStatusWidget"]',
-            '[data-testid="stDecoration"]',
-            '[data-testid="stFloatingActionButton"]',
-            'button[kind="header"]',
-            'a[href*="streamlit"]'
-        ];
-
-        iframeSelectors.forEach(sel => {
-            document.querySelectorAll(sel).forEach(el => el.remove());
-        });
-
-        // Remove Streamlit Cloud floating UI from parent DOM
-        if (window.parent) {
-            const parentDoc = window.parent.document;
-
-            const parentSelectors = [
-                'div[style*="position: fixed"]',
-                'a[href*="streamlit.app"]',
-                'button[aria-label*="Deploy"]',
-                'button[aria-label*="Open"]'
-            ];
-
-            parentSelectors.forEach(sel => {
-                parentDoc.querySelectorAll(sel).forEach(el => el.remove());
-            });
-        }
-
-    } catch(e) {}
-}
-
-// Run immediately
-removeStreamlitBranding();
-
-// Observe DOM changes
-const observer = new MutationObserver(() => removeStreamlitBranding());
-observer.observe(document, { childList: true, subtree: true });
-
-// Keep retrying
-setInterval(removeStreamlitBranding, 500);
-
-</script>
-""", height=0)
 
 # --- Models ---
 ttsmodel = "gemini-2.5-flash-preview-tts"
