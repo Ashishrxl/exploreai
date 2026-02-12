@@ -115,7 +115,6 @@ def get_all_api_keys():
         k = st.secrets.get(f"KEY_{i}")
         if k:
             keys.append(k)
-            
     return keys
 
 
@@ -235,6 +234,7 @@ def main():
 
     col1, col2 = st.columns(2)
 
+    # ---------------- INPUT ----------------
     with col1:
         st.header("📝 Input Text")
         tab1, tab2 = st.tabs(["📁 Upload File", "✍️ Type Text"])
@@ -256,6 +256,17 @@ def main():
                 st.session_state.text_confirmed = True
                 st.rerun()
 
+        # ✅ SHOW TEXT TO USER (PERSISTENT)
+        if st.session_state.text_confirmed and st.session_state.input_text:
+            st.markdown("### 📖 Text Preview")
+            st.text_area(
+                "Preview",
+                value=st.session_state.input_text,
+                height=250,
+                disabled=True
+            )
+
+    # ---------------- AUDIO ----------------
     with col2:
         st.header("🔊 Generate Audio")
 
@@ -275,7 +286,7 @@ def main():
 
                     if summary:
                         use_text = summary
-                        st.success("Summary ready!")
+                        st.session_state.summary_text = summary
 
                 with st.spinner("Creating audio…"):
                     audio_data = generate_audio_tts(
@@ -286,16 +297,20 @@ def main():
                     )
 
                 if audio_data:
-                    audio_buf = save_wave_file(audio_data)
-                    st.audio(audio_buf, format="audio/wav")
+                    st.session_state.audio_buffer = save_wave_file(audio_data)
+                    st.session_state.audio_generated = True
 
-                    ts = time.strftime("%Y%m%d-%H%M%S")
-                    st.download_button(
-                        "⬇️ Download audio",
-                        data=audio_buf,
-                        file_name=f"audio_{ts}.wav",
-                        mime="audio/wav"
-                    )
+        # ✅ PERSIST AUDIO PLAYER
+        if st.session_state.audio_generated and st.session_state.audio_buffer:
+            st.audio(st.session_state.audio_buffer, format="audio/wav")
+
+            ts = time.strftime("%Y%m%d-%H%M%S")
+            st.download_button(
+                "⬇️ Download audio",
+                data=st.session_state.audio_buffer,
+                file_name=f"audio_{ts}.wav",
+                mime="audio/wav"
+            )
 
         else:
             st.info("👈 Please upload or type text first.")
