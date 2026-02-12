@@ -1,4 +1,8 @@
 import streamlit as st
+
+# --- Page Config MUST be first ---
+st.set_page_config(page_title="VoiceVerse AI", layout="centered")
+
 from google import genai
 from google.genai import types
 import wave
@@ -13,34 +17,62 @@ logging.basicConfig(
     force=True
 )
 
-# --- Hide Streamlit UI elements ---
-try:
-    html(
-        """
-        <script>
-        try {
-          const sel = window.top.document.querySelectorAll('[href*="streamlit.io"], [href*="streamlit.app"]');
-          sel.forEach(e => e.style.display='none');
-        } catch(e) {}
-        </script>
-        """,
-        height=0
-    )
-except Exception:
-    pass
-
+# --- Hide Streamlit UI elements (CSS) ---
 hide_streamlit_style = """
 <style>
+
+/* Hide hamburger menu */
 #MainMenu {visibility: hidden;}
+
+/* Hide footer */
 footer {visibility: hidden;}
-[data-testid="stStatusWidget"] {display: none;}
-[data-testid="stToolbar"] {display: none;}
-a[href^="https://github.com"] {display: none !important;}
-a[href^="https://streamlit.io"] {display: none !important;}
-header > div:nth-child(2) { display: none; }
+
+/* Hide header */
+header {visibility: hidden;}
+
+/* Hide toolbar and status widgets */
+[data-testid="stToolbar"] {display: none !important;}
+[data-testid="stStatusWidget"] {display: none !important;}
+[data-testid="stDecoration"] {display: none !important;}
+[data-testid="stFloatingActionButton"] {display: none !important;}
+
+/* Hide streamlit badges */
+a[href*="streamlit.io"] {display: none !important;}
+a[href*="streamlit.app"] {display: none !important;}
+button[kind="header"] {display: none !important;}
+
+/* Hide bottom floating container */
+div[data-testid="stAppViewBlockContainer"] > div:last-child {
+    display: none !important;
+}
+
 </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
+# --- Extra JS removal (handles dynamic injection) ---
+html("""
+<script>
+function hideStreamlitBadges() {
+    const selectors = [
+        '[data-testid="stToolbar"]',
+        '[data-testid="stStatusWidget"]',
+        '[data-testid="stDecoration"]',
+        '[data-testid="stFloatingActionButton"]',
+        'button[kind="header"]',
+        'a[href*="streamlit.app"]',
+        'a[href*="streamlit.io"]'
+    ];
+
+    selectors.forEach(sel => {
+        document.querySelectorAll(sel).forEach(el => el.remove());
+    });
+}
+
+setInterval(hideStreamlitBadges, 1000);
+</script>
+""", height=0)
+
 # --- Models ---
 ttsmodel = "gemini-2.5-flash-preview-tts"
 textmodel = "gemini-2.5-flash-lite"
@@ -160,7 +192,6 @@ def generate_audio(script_text: str, voice_name="Kore", language="English"):
     return ""
 
 # --- UI ---
-st.set_page_config(page_title="VoiceVerse AI", layout="centered")
 st.title("🎙️ VoiceVerse AI Podcast Generator")
 
 # --- Session State Init ---
