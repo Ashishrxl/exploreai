@@ -3,29 +3,6 @@ import streamlit as st
 # --- Page Config MUST be first ---
 st.set_page_config(page_title="VoiceVerse AI", layout="centered")
 
-# ⭐ NEW — STREAMLIT LINK CLICK BLOCKER (Added)
-st.markdown("""
-<style>
-
-/* Disable clicking Streamlit links */
-a[href*="streamlit.io"],
-a[href*="streamlit.app"] {
-    pointer-events: none !important;
-    cursor: default !important;
-}
-
-/* Disable floating mobile bottom bar clicking */
-div:has(a[href*="streamlit"]) {
-    pointer-events: none !important;
-}
-
-/* Extra protection */
-footer {
-    pointer-events: none !important;
-}
-
-</style>
-""", unsafe_allow_html=True)
 
 from streamlit.components.v1 import html
 
