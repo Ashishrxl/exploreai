@@ -217,3 +217,33 @@ if st.session_state.audio_file:
         )
 
     st.success("🎉 Podcast ready!")
+
+
+# ---------------- UI CLEANUP ----------------
+try:
+    html(
+      """
+      <script>
+      try {
+        const sel = window.top.document.querySelectorAll('[href*="streamlit.io"], [href*="streamlit.app"]');
+        sel.forEach(e => e.style.display='none');
+      } catch(e) {}
+      </script>
+      """,
+      height=0
+    )
+except Exception as e:
+    print("HTML injection warning:", e)
+
+hide_streamlit_style = """
+<style>
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+[data-testid="stStatusWidget"] {display: none;}
+[data-testid="stToolbar"] {display: none;}
+a[href^="https://github.com"] {display: none !important;}
+a[href^="https://streamlit.io"] {display: none !important;}
+header > div:nth-child(2) { display: none; }
+</style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
