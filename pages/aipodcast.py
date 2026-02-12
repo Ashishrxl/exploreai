@@ -5,7 +5,6 @@ import wave
 import random
 import base64
 from streamlit.components.v1 import html
-
 import logging
 
 logging.basicConfig(
@@ -13,8 +12,6 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     force=True
 )
-
-
 
 # --- Hide Streamlit UI elements ---
 try:
@@ -61,7 +58,7 @@ try:
         st.secrets["KEY_11"],
     ]
     random.shuffle(api_keys)
-    
+
 except Exception:
     st.error("⚠️ API keys not configured properly.")
     st.stop()
@@ -83,7 +80,7 @@ def save_wave(filename: str, pcm_data: bytes, channels=1, rate=24000, sample_wid
         wf.setframerate(rate)
         wf.writeframes(pcm_data)
 
-# --- Script Generator with Key Rotation ---
+# --- Script Generator ---
 def generate_script(topic: str) -> str:
 
     prompt = f"""
@@ -103,7 +100,6 @@ def generate_script(topic: str) -> str:
                 model=textmodel,
                 contents=prompt
             )
-            
 
             return resp.text or "Script generation failed."
 
@@ -112,7 +108,7 @@ def generate_script(topic: str) -> str:
 
     return "❌ All API keys exhausted. Please try later."
 
-# --- Audio Generator with Key Rotation ---
+# --- Audio Generator ---
 def generate_audio(script_text: str, voice_name="Kore", language="English"):
 
     if language.lower() == "hindi":
@@ -164,6 +160,13 @@ def generate_audio(script_text: str, voice_name="Kore", language="English"):
 st.set_page_config(page_title="VoiceVerse AI", layout="centered")
 st.title("🎙️ VoiceVerse AI Podcast Generator")
 
+# --- Session State Init ---
+if "script" not in st.session_state:
+    st.session_state.script = ""
+
+if "audio_file" not in st.session_state:
+    st.session_state.audio_file = ""
+
 topic = st.text_input("Enter your podcast topic:")
 language = st.selectbox("Choose a language:", ["English", "Hindi", "Bhojpuri"])
 gender = st.radio("Select voice gender:", ["Female", "Male"])
@@ -173,6 +176,7 @@ male_voices = ["Puck", "Charon", "Fenrir"]
 
 voice = st.selectbox("Choose a voice:", female_voices if gender == "Female" else male_voices)
 
+# --- Generate Button ---
 if st.button("Generate Podcast"):
 
     if not topic.strip():
@@ -181,24 +185,28 @@ if st.button("Generate Podcast"):
 
         with st.spinner("Creating podcast script..."):
             script = generate_script(topic)
-            st.text_area("Generated Script", script, height=300)
+            st.session_state.script = script
+            st.session_state.audio_file = ""
 
         if "❌" not in script:
             with st.spinner("Converting to audio..."):
-
                 audio_file = generate_audio(script, voice, language)
+                st.session_state.audio_file = audio_file
 
-                if audio_file:
-                    st.audio(audio_file)
+# --- Persist Script ---
+if st.session_state.script:
+    st.text_area("Generated Script", st.session_state.script, height=300)
 
-                    with open(audio_file, "rb") as f:
-                        st.download_button(
-                            "📥 Download Podcast",
-                            f,
-                            file_name="voiceverse_podcast.wav",
-                            mime="audio/wav"
-                        )
+# --- Persist Audio ---
+if st.session_state.audio_file:
+    st.audio(st.session_state.audio_file)
 
-                    st.success("🎉 Podcast ready!")
-                else:
-                    st.warning("🔊 Audio generation failed (all keys exhausted).")
+    with open(st.session_state.audio_file, "rb") as f:
+        st.download_button(
+            "📥 Download Podcast",
+            f,
+            file_name="voiceverse_podcast.wav",
+            mime="audio/wav"
+        )
+
+    st.success("🎉 Podcast ready!")
