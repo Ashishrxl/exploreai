@@ -46,6 +46,34 @@ header > div:nth-child(2) { display: none; }
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
+
+st.markdown("""
+<style>
+iframe[title="streamlitAppViewContainer"] + div {
+    display:none !important;
+}
+
+div[data-testid="stDecoration"] {
+    display:none !important;
+}
+
+div[data-testid="stToolbar"] {
+    display:none !important;
+}
+
+button[title="View fullscreen"] {
+    display:none !important;
+}
+
+footer {
+    visibility:hidden;
+}
+
+header {
+    visibility:hidden;
+}
+</style>
+""", unsafe_allow_html=True)
 # --- Models ---
 ttsmodel = "gemini-2.5-flash-preview-tts"
 textmodel = "gemini-2.5-flash-lite"
@@ -219,31 +247,3 @@ if st.session_state.audio_file:
     st.success("🎉 Podcast ready!")
 
 
-# ---------------- UI CLEANUP ----------------
-try:
-    html(
-      """
-      <script>
-      try {
-        const sel = window.top.document.querySelectorAll('[href*="streamlit.io"], [href*="streamlit.app"]');
-        sel.forEach(e => e.style.display='none');
-      } catch(e) {}
-      </script>
-      """,
-      height=0
-    )
-except Exception as e:
-    print("HTML injection warning:", e)
-
-hide_streamlit_style = """
-<style>
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-[data-testid="stStatusWidget"] {display: none;}
-[data-testid="stToolbar"] {display: none;}
-a[href^="https://github.com"] {display: none !important;}
-a[href^="https://streamlit.io"] {display: none !important;}
-header > div:nth-child(2) { display: none; }
-</style>
-"""
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
