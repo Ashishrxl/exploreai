@@ -55,12 +55,12 @@ ttsmodel = "gemini-2.5-flash-preview-tts"
 # API Keys Collection (Auto Rotation)
 # ==============================
 api_keys = []
-for i in range(1, 12):  # supports up to 50 keys safely
+for i in range(1, 12):
     key_name = f"KEY_{i}"
     if key_name in st.secrets:
         api_keys.append(st.secrets[key_name])
 
-        random.shuffle(api_keys)
+random.shuffle(api_keys)
 
 if not api_keys:
     st.warning("🔑 AI service is not configured. Please contact the app administrator.")
@@ -89,7 +89,6 @@ def generate_with_key_rotation(model, contents, config=None):
             errors.append(str(e))
             continue
 
-    # Friendly error message
     st.error(
         "⚠️ Our AI service is currently busy or temporarily unavailable.\n\n"
         "👉 Please wait a moment and try again.\n"
@@ -217,6 +216,18 @@ if ref_file and not st.session_state.lyrics_text:
         except Exception:
             st.warning("🎼 Couldn't extract lyrics automatically. You can still sing along by ear.")
             st.session_state.lyrics_text = ""
+
+# ==============================
+# NEW: Display & Persist Lyrics
+# ==============================
+if st.session_state.lyrics_text:
+    st.subheader("📜 Extracted Lyrics (Sing Along)")
+    st.session_state.lyrics_text = st.text_area(
+        "You can edit the lyrics if needed:",
+        value=st.session_state.lyrics_text,
+        height=300
+    )
+    st.success("🎤 Lyrics ready! Sing along while recording below.")
 
 # ==============================
 # Step 3: Record user singing
