@@ -93,7 +93,7 @@ def generate_with_key_rotation(model, contents, config=None):
     return None
 
 # ==============================
-# Utility
+# Utility Functions
 # ==============================
 def safe_read_audio(path):
     try:
@@ -150,7 +150,7 @@ def map_language_code(lang):
     return "en-US" if lang == "English" else "hi-IN"
 
 # ==============================
-# Step 2 Upload
+# Step 2 Upload Song
 # ==============================
 st.header("🎧 Step 2: Upload Reference Song")
 ref_file = st.file_uploader("Upload a song (mp3 or wav)", type=["mp3", "wav"])
@@ -201,12 +201,34 @@ if recorded_audio_native:
     st.success("✅ Recording captured!")
 
 # ==============================
-# Step 4 Feedback
+# Step 4 Compare + Feedback
 # ==============================
 if st.session_state.ref_tmp_path and recorded_file_path:
 
-    ref_energy = load_audio_energy(st.session_state.ref_tmp_path)
-    user_energy = load_audio_energy(recorded_file_path)
+    st.subheader("🎶 Reference vs Your Singing")
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.audio(st.session_state.ref_tmp_path)
+        st.caption("🎧 Reference Song")
+    with col_b:
+        st.audio(recorded_file_path)
+        st.caption("🎤 Your Recording")
+
+    # Restore Energy Graph
+    with st.spinner("🔍 Analyzing energy patterns..."):
+        ref_energy = load_audio_energy(st.session_state.ref_tmp_path)
+        user_energy = load_audio_energy(recorded_file_path)
+
+    if len(ref_energy) and len(user_energy):
+        fig, ax = plt.subplots(figsize=(10, 4))
+        ax.plot(ref_energy, label="Reference")
+        ax.plot(user_energy, label="You")
+        ax.legend()
+        ax.set_title("Energy Contour Comparison")
+        st.pyplot(fig)
+    else:
+        st.info("📊 Energy comparison limited.")
 
     if len(user_energy) == 0 or np.mean(user_energy) < 0.02:
         st.error("⚠️ No singing detected. Please sing clearly.")
@@ -217,17 +239,18 @@ if st.session_state.ref_tmp_path and recorded_file_path:
     evaluation_prompt = """
 You are a strict professional vocal coach.
 
-Be honest and objective.
+Analyze the singing carefully.
 
-If singing is bad, clearly say it is bad.
-If good, explain why it is good.
+Be honest.
+If bad, clearly explain weaknesses.
+If good, clearly explain strengths.
 
 Provide:
-1. Overall Rating (0-100)
-2. Pitch feedback
-3. Rhythm feedback
-4. Energy feedback
-5. Final verdict (Good / Average / Poor)
+1. Overall Score (0-100)
+2. Pitch Analysis
+3. Rhythm Analysis
+4. Energy Analysis
+5. Final Verdict (Excellent / Good / Average / Poor)
 """
 
     response = generate_with_key_rotation(
@@ -246,11 +269,20 @@ Provide:
     st.write(feedback_text)
 
     # ==============================
-    # Audio Feedback (RESTORED)
+    # Improved Audio Feedback
     # ==============================
     if enable_audio_feedback and response:
-        with st.spinner("🔊 Generating spoken feedback..."):
+        with st.spinner("🔊 Generating professional audio feedback..."):
             try:
+                clean_tts_prompt = f"""
+Speak the following vocal coaching feedback in a clear, confident, professional coach tone.
+Use natural pauses.
+Do not sound robotic.
+
+Feedback:
+{feedback_text}
+"""
+
                 config = types.GenerateContentConfig(
                     response_modalities=["AUDIO"],
                     speech_config=types.SpeechConfig(
@@ -265,7 +297,7 @@ Provide:
 
                 tts_response = generate_with_key_rotation(
                     ttsmodel,
-                    f"Speak this vocal coaching feedback clearly and warmly: {feedback_text}",
+                    clean_tts_prompt,
                     config
                 )
 
