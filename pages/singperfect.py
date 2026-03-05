@@ -11,7 +11,6 @@ from streamlit.components.v1 import html
 import wave
 import base64
 import os
-from contextlib import contextmanager
 import io
 
 # ==============================
@@ -50,6 +49,9 @@ footer {visibility:hidden;}
     white-space:pre-wrap;
     font-size:1.05rem;
     line-height:1.6;
+    max-height:250px;
+    overflow-y:auto;
+    border:1px solid #ddd;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -60,7 +62,7 @@ sttmodel = "gemini-2.5-flash-lite"
 ttsmodel = "gemini-2.5-flash-preview-tts"
 
 # ==============================
-# API Keys Collection
+# API Keys
 # ==============================
 api_keys = []
 for i in range(1, 12):
@@ -71,7 +73,7 @@ for i in range(1, 12):
 random.shuffle(api_keys)
 
 if not api_keys:
-    st.warning("🔑 AI service is not configured.")
+    st.warning("🔑 AI service not configured.")
     st.stop()
 
 def generate_with_key_rotation(model, contents, config=None):
@@ -91,7 +93,7 @@ def generate_with_key_rotation(model, contents, config=None):
     return None
 
 # ==============================
-# Utility functions
+# Utility
 # ==============================
 def safe_read_audio(path):
     try:
@@ -105,7 +107,6 @@ def safe_read_audio(path):
         sr = audio.frame_rate
         return y, sr
 
-@st.cache_data(show_spinner=False)
 def load_audio_energy(path):
     try:
         y, sr = safe_read_audio(path)
@@ -121,6 +122,18 @@ def load_audio_energy(path):
     except Exception:
         return np.array([])
 
+def save_tts_bytes(path, pcm_bytes):
+    if isinstance(pcm_bytes, str):
+        pcm_bytes = base64.b64decode(pcm_bytes)
+
+    try:
+        bio = io.BytesIO(pcm_bytes)
+        seg = AudioSegment.from_file(bio)
+        seg.export(path, format="wav")
+    except Exception:
+        with open(path, "wb") as f:
+            f.write(pcm_bytes)
+
 # ==============================
 # Step 1
 # ==============================
@@ -129,7 +142,7 @@ col1, col2 = st.columns(2)
 with col1:
     feedback_lang = st.selectbox("🗣️ Feedback language", ["English", "Hindi"])
 with col2:
-    enable_audio_feedback = st.checkbox("🔊 Generate Audio Feedback", value=False)
+    enable_audio_feedback = st.checkbox("🔊 Generate Audio Feedback", value=True)
 
 voice_choice = st.selectbox("🎤 Choose AI voice", ["Kore", "Ava", "Wave"])
 
@@ -137,7 +150,7 @@ def map_language_code(lang):
     return "en-US" if lang == "English" else "hi-IN"
 
 # ==============================
-# Step 2: Upload Song
+# Step 2 Upload
 # ==============================
 st.header("🎧 Step 2: Upload Reference Song")
 ref_file = st.file_uploader("Upload a song (mp3 or wav)", type=["mp3", "wav"])
@@ -148,25 +161,24 @@ if "ref_tmp_path" not in st.session_state:
     st.session_state.ref_tmp_path = None
 
 if ref_file and not st.session_state.lyrics_text:
-    with st.spinner("🎵 Extracting lyrics..."):
-        tmp_path = tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name
-        with open(tmp_path, "wb") as f:
-            f.write(ref_file.read())
-        st.session_state.ref_tmp_path = tmp_path
+    tmp_path = tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name
+    with open(tmp_path, "wb") as f:
+        f.write(ref_file.read())
+    st.session_state.ref_tmp_path = tmp_path
 
-        response = generate_with_key_rotation(
-            sttmodel,
-            [{
-                "role": "user",
-                "parts": [
-                    {"text": "Extract the complete lyrics from this song and return only the text."},
-                    {"inline_data": {"mime_type": "audio/wav", "data": open(tmp_path, "rb").read()}}
-                ]
-            }]
-        )
+    response = generate_with_key_rotation(
+        sttmodel,
+        [{
+            "role": "user",
+            "parts": [
+                {"text": "Extract complete lyrics only."},
+                {"inline_data": {"mime_type": "audio/wav", "data": open(tmp_path, "rb").read()}}
+            ]
+        }]
+    )
 
-        if response:
-            st.session_state.lyrics_text = response.candidates[0].content.parts[0].text.strip()
+    if response:
+        st.session_state.lyrics_text = response.candidates[0].content.parts[0].text.strip()
 
 if st.session_state.lyrics_text:
     st.subheader("📜 Extracted Lyrics (Sing Along)")
@@ -176,7 +188,7 @@ if st.session_state.lyrics_text:
     )
 
 # ==============================
-# Step 3: Record
+# Step 3 Record
 # ==============================
 st.header("🎤 Step 3: Record Your Singing")
 recorded_audio_native = st.audio_input("🎙️ Record your voice")
@@ -189,34 +201,26 @@ if recorded_audio_native:
     st.success("✅ Recording captured!")
 
 # ==============================
-# Step 4: Compare + Feedback
+# Step 4 Feedback
 # ==============================
 if st.session_state.ref_tmp_path and recorded_file_path:
 
     ref_energy = load_audio_energy(st.session_state.ref_tmp_path)
     user_energy = load_audio_energy(recorded_file_path)
 
-    # 🔎 Silence Detection
     if len(user_energy) == 0 or np.mean(user_energy) < 0.02:
-        st.error("⚠️ No singing detected. Please sing clearly and try again.")
+        st.error("⚠️ No singing detected. Please sing clearly.")
         st.stop()
 
     st.subheader("💬 AI Vocal Feedback")
 
-    # 🔥 UPDATED STRICT EVALUATION PROMPT
     evaluation_prompt = """
 You are a strict professional vocal coach.
 
-Analyze the user's singing compared to the reference song.
+Be honest and objective.
 
-IMPORTANT RULES:
-- If singing is poor, clearly say it needs improvement.
-- If pitch is wrong, say pitch is wrong.
-- If rhythm is off, say rhythm is off.
-- If energy is low, say energy is low.
-- If performance is good, praise specifically why.
-- Do NOT give generic praise.
-- Be honest and objective.
+If singing is bad, clearly say it is bad.
+If good, explain why it is good.
 
 Provide:
 1. Overall Rating (0-100)
@@ -238,12 +242,43 @@ Provide:
         }]
     )
 
-    if response:
-        feedback_text = response.candidates[0].content.parts[0].text
-    else:
-        feedback_text = "Evaluation unavailable."
-
+    feedback_text = response.candidates[0].content.parts[0].text if response else "Evaluation unavailable."
     st.write(feedback_text)
+
+    # ==============================
+    # Audio Feedback (RESTORED)
+    # ==============================
+    if enable_audio_feedback and response:
+        with st.spinner("🔊 Generating spoken feedback..."):
+            try:
+                config = types.GenerateContentConfig(
+                    response_modalities=["AUDIO"],
+                    speech_config=types.SpeechConfig(
+                        language_code=map_language_code(feedback_lang),
+                        voice_config=types.VoiceConfig(
+                            prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                voice_name=voice_choice
+                            )
+                        )
+                    )
+                )
+
+                tts_response = generate_with_key_rotation(
+                    ttsmodel,
+                    f"Speak this vocal coaching feedback clearly and warmly: {feedback_text}",
+                    config
+                )
+
+                if tts_response:
+                    part = tts_response.candidates[0].content.parts[0]
+                    pcm_data = part.inline_data.data
+                    tts_path = tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name
+                    save_tts_bytes(tts_path, pcm_data)
+                    st.audio(tts_path)
+                    st.success("✅ Audio feedback ready!")
+
+            except Exception:
+                st.warning("🔊 Audio generation failed.")
 
 else:
     st.info("🎵 Upload a song and record your voice to begin.")
