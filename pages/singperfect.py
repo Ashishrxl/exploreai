@@ -226,13 +226,29 @@ if st.session_state.ref_tmp_path and recorded_file_path:
         st.stop()
 
     st.subheader("💬 AI Vocal Feedback")
+    evaluation_prompt = """
+You are a strict professional vocal coach.
+
+Analyze the singing carefully.
+
+Be honest.
+If bad, clearly explain weaknesses.
+If good, clearly explain strengths.
+
+Provide:
+1. Overall Score (0-100)
+2. Pitch Analysis
+3. Rhythm Analysis
+4. Energy Analysis
+5. Final Verdict (Excellent / Good / Average / Poor)
+"""
 
     response = generate_with_key_rotation(
         sttmodel,
         [{
             "role": "user",
             "parts": [
-                {"text": "Be a strict vocal coach and evaluate honestly."},
+                {"text": evaluation_prompt },
                 {"inline_data": {"mime_type": "audio/wav", "data": open(st.session_state.ref_tmp_path, "rb").read()}},
                 {"inline_data": {"mime_type": "audio/wav", "data": open(recorded_file_path, "rb").read()}}
             ]
