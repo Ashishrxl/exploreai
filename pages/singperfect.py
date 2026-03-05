@@ -12,6 +12,7 @@ import wave
 import base64
 import os
 import io
+import hashlib
 
 # ==============================
 # Hide Streamlit elements
@@ -130,6 +131,15 @@ def write_pcm_as_wav(path, pcm_bytes, sample_rate=24000):
         wf.writeframes(pcm_bytes)
 
 # ==============================
+# Session State Initialization
+# ==============================
+if "feedback_text" not in st.session_state:
+    st.session_state.feedback_text = None
+
+if "last_recording_hash" not in st.session_state:
+    st.session_state.last_recording_hash = None
+
+# ==============================
 # Step 1
 # ==============================
 st.header("⚙️ Step 1: Choose Feedback Options")
@@ -190,9 +200,18 @@ recorded_audio_native = st.audio_input("🎙️ Record your voice")
 
 recorded_file_path = None
 if recorded_audio_native:
+    audio_bytes = recorded_audio_native.getvalue()
+
+    # ✅ Detect new recording using hash
+    current_hash = hashlib.md5(audio_bytes).hexdigest()
+    if st.session_state.last_recording_hash != current_hash:
+        st.session_state.feedback_text = None  # Reset feedback
+        st.session_state.last_recording_hash = current_hash
+
     recorded_file_path = tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name
     with open(recorded_file_path, "wb") as f:
-        f.write(recorded_audio_native.getvalue())
+        f.write(audio_bytes)
+
     st.success("✅ Recording captured!")
 
 # ==============================
@@ -225,7 +244,10 @@ if st.session_state.ref_tmp_path and recorded_file_path:
         st.stop()
 
     st.subheader("💬 AI Vocal Feedback")
-    evaluation_prompt = """
+
+    if st.session_state.feedback_text is None:
+
+        evaluation_prompt = """
 You are a strict professional vocal coach.
 
 Analyze the singing carefully.
@@ -242,27 +264,29 @@ Provide:
 5. Final Verdict (Excellent / Good / Average / Poor)
 """
 
-    response = generate_with_key_rotation(
-        sttmodel,
-        [{
-            "role": "user",
-            "parts": [
-                {"text": evaluation_prompt },
-                {"inline_data": {"mime_type": "audio/wav", "data": open(st.session_state.ref_tmp_path, "rb").read()}},
-                {"inline_data": {"mime_type": "audio/wav", "data": open(recorded_file_path, "rb").read()}}
-            ]
-        }]
-    )
+        response = generate_with_key_rotation(
+            sttmodel,
+            [{
+                "role": "user",
+                "parts": [
+                    {"text": evaluation_prompt },
+                    {"inline_data": {"mime_type": "audio/wav", "data": open(st.session_state.ref_tmp_path, "rb").read()}},
+                    {"inline_data": {"mime_type": "audio/wav", "data": open(recorded_file_path, "rb").read()}}
+                ]
+            }]
+        )
 
-    feedback_text = response.candidates[0].content.parts[0].text if response else "Evaluation unavailable."
-    st.write(feedback_text)
+        if response:
+            st.session_state.feedback_text = response.candidates[0].content.parts[0].text
+        else:
+            st.session_state.feedback_text = "Evaluation unavailable."
 
-    # ==============================
-    # ✅ AUDIO FEEDBACK NOW WRAPPED IN BUTTON
-    # ==============================
-    if enable_audio_feedback and response:
+    st.write(st.session_state.feedback_text)
+
+    if enable_audio_feedback:
         if st.button("🔊 Generate Audio Feedback"):
             with st.spinner("🔊 Generating audio feedback..."):
+
                 config = types.GenerateContentConfig(
                     response_modalities=["AUDIO"],
                     speech_config=types.SpeechConfig(
@@ -277,7 +301,7 @@ Provide:
 
                 tts_response = generate_with_key_rotation(
                     ttsmodel,
-                    feedback_text,
+                    st.session_state.feedback_text,
                     config
                 )
 
