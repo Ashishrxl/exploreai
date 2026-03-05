@@ -122,17 +122,13 @@ def load_audio_energy(path):
     except Exception:
         return np.array([])
 
-def save_tts_bytes(path, pcm_bytes):
-    if isinstance(pcm_bytes, str):
-        pcm_bytes = base64.b64decode(pcm_bytes)
-
-    try:
-        bio = io.BytesIO(pcm_bytes)
-        seg = AudioSegment.from_file(bio)
-        seg.export(path, format="wav")
-    except Exception:
-        with open(path, "wb") as f:
-            f.write(pcm_bytes)
+# ✅ FIXED WAV WRITER (CRITICAL FIX)
+def write_pcm_as_wav(path, pcm_bytes, sample_rate=24000):
+    with wave.open(path, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)  # 16-bit audio
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm_bytes)
 
 # ==============================
 # Step 1
@@ -210,12 +206,9 @@ if st.session_state.ref_tmp_path and recorded_file_path:
     col_a, col_b = st.columns(2)
     with col_a:
         st.audio(st.session_state.ref_tmp_path)
-        st.caption("🎧 Reference Song")
     with col_b:
         st.audio(recorded_file_path)
-        st.caption("🎤 Your Recording")
 
-    # Restore Energy Graph
     with st.spinner("🔍 Analyzing energy patterns..."):
         ref_energy = load_audio_energy(st.session_state.ref_tmp_path)
         user_energy = load_audio_energy(recorded_file_path)
@@ -227,38 +220,19 @@ if st.session_state.ref_tmp_path and recorded_file_path:
         ax.legend()
         ax.set_title("Energy Contour Comparison")
         st.pyplot(fig)
-    else:
-        st.info("📊 Energy comparison limited.")
 
     if len(user_energy) == 0 or np.mean(user_energy) < 0.02:
-        st.error("⚠️ No singing detected. Please sing clearly.")
+        st.error("⚠️ No singing detected.")
         st.stop()
 
     st.subheader("💬 AI Vocal Feedback")
-
-    evaluation_prompt = """
-You are a strict professional vocal coach.
-
-Analyze the singing carefully.
-
-Be honest.
-If bad, clearly explain weaknesses.
-If good, clearly explain strengths.
-
-Provide:
-1. Overall Score (0-100)
-2. Pitch Analysis
-3. Rhythm Analysis
-4. Energy Analysis
-5. Final Verdict (Excellent / Good / Average / Poor)
-"""
 
     response = generate_with_key_rotation(
         sttmodel,
         [{
             "role": "user",
             "parts": [
-                {"text": evaluation_prompt},
+                {"text": "Be a strict vocal coach and evaluate honestly."},
                 {"inline_data": {"mime_type": "audio/wav", "data": open(st.session_state.ref_tmp_path, "rb").read()}},
                 {"inline_data": {"mime_type": "audio/wav", "data": open(recorded_file_path, "rb").read()}}
             ]
@@ -269,48 +243,40 @@ Provide:
     st.write(feedback_text)
 
     # ==============================
-    # Improved Audio Feedback
+    # ✅ FIXED AUDIO FEEDBACK
     # ==============================
     if enable_audio_feedback and response:
-        with st.spinner("🔊 Generating professional audio feedback..."):
-            try:
-                clean_tts_prompt = f"""
-Speak the following vocal coaching feedback in a clear, confident, professional coach tone.
-Use natural pauses.
-Do not sound robotic.
-
-Feedback:
-{feedback_text}
-"""
-
-                config = types.GenerateContentConfig(
-                    response_modalities=["AUDIO"],
-                    speech_config=types.SpeechConfig(
-                        language_code=map_language_code(feedback_lang),
-                        voice_config=types.VoiceConfig(
-                            prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                                voice_name=voice_choice
-                            )
+        with st.spinner("🔊 Generating audio feedback..."):
+            config = types.GenerateContentConfig(
+                response_modalities=["AUDIO"],
+                speech_config=types.SpeechConfig(
+                    language_code=map_language_code(feedback_lang),
+                    voice_config=types.VoiceConfig(
+                        prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                            voice_name=voice_choice
                         )
                     )
                 )
+            )
 
-                tts_response = generate_with_key_rotation(
-                    ttsmodel,
-                    clean_tts_prompt,
-                    config
-                )
+            tts_response = generate_with_key_rotation(
+                ttsmodel,
+                feedback_text,
+                config
+            )
 
-                if tts_response:
-                    part = tts_response.candidates[0].content.parts[0]
-                    pcm_data = part.inline_data.data
-                    tts_path = tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name
-                    save_tts_bytes(tts_path, pcm_data)
-                    st.audio(tts_path)
-                    st.success("✅ Audio feedback ready!")
+            if tts_response:
+                part = tts_response.candidates[0].content.parts[0]
+                pcm_data = part.inline_data.data
 
-            except Exception:
-                st.warning("🔊 Audio generation failed.")
+                if isinstance(pcm_data, str):
+                    pcm_data = base64.b64decode(pcm_data)
+
+                tts_path = tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name
+                write_pcm_as_wav(tts_path, pcm_data)
+
+                st.audio(tts_path)
+                st.success("✅ Audio feedback ready!")
 
 else:
     st.info("🎵 Upload a song and record your voice to begin.")
