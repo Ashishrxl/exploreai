@@ -122,11 +122,10 @@ def load_audio_energy(path):
     except Exception:
         return np.array([])
 
-# ✅ FIXED WAV WRITER (CRITICAL FIX)
 def write_pcm_as_wav(path, pcm_bytes, sample_rate=24000):
     with wave.open(path, "wb") as wf:
         wf.setnchannels(1)
-        wf.setsampwidth(2)  # 16-bit audio
+        wf.setsampwidth(2)
         wf.setframerate(sample_rate)
         wf.writeframes(pcm_bytes)
 
@@ -259,40 +258,41 @@ Provide:
     st.write(feedback_text)
 
     # ==============================
-    # ✅ FIXED AUDIO FEEDBACK
+    # ✅ AUDIO FEEDBACK NOW WRAPPED IN BUTTON
     # ==============================
     if enable_audio_feedback and response:
-        with st.spinner("🔊 Generating audio feedback..."):
-            config = types.GenerateContentConfig(
-                response_modalities=["AUDIO"],
-                speech_config=types.SpeechConfig(
-                    language_code=map_language_code(feedback_lang),
-                    voice_config=types.VoiceConfig(
-                        prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                            voice_name=voice_choice
+        if st.button("🔊 Generate Audio Feedback"):
+            with st.spinner("🔊 Generating audio feedback..."):
+                config = types.GenerateContentConfig(
+                    response_modalities=["AUDIO"],
+                    speech_config=types.SpeechConfig(
+                        language_code=map_language_code(feedback_lang),
+                        voice_config=types.VoiceConfig(
+                            prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                voice_name=voice_choice
+                            )
                         )
                     )
                 )
-            )
 
-            tts_response = generate_with_key_rotation(
-                ttsmodel,
-                feedback_text,
-                config
-            )
+                tts_response = generate_with_key_rotation(
+                    ttsmodel,
+                    feedback_text,
+                    config
+                )
 
-            if tts_response:
-                part = tts_response.candidates[0].content.parts[0]
-                pcm_data = part.inline_data.data
+                if tts_response:
+                    part = tts_response.candidates[0].content.parts[0]
+                    pcm_data = part.inline_data.data
 
-                if isinstance(pcm_data, str):
-                    pcm_data = base64.b64decode(pcm_data)
+                    if isinstance(pcm_data, str):
+                        pcm_data = base64.b64decode(pcm_data)
 
-                tts_path = tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name
-                write_pcm_as_wav(tts_path, pcm_data)
+                    tts_path = tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name
+                    write_pcm_as_wav(tts_path, pcm_data)
 
-                st.audio(tts_path)
-                st.success("✅ Audio feedback ready!")
+                    st.audio(tts_path)
+                    st.success("✅ Audio feedback ready!")
 
 else:
     st.info("🎵 Upload a song and record your voice to begin.")
