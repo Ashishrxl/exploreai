@@ -85,15 +85,13 @@ def generate_with_key_rotation(model, contents, config=None):
             )
             if response:
                 return response
-        except:
+        except Exception:
             continue
-
-    st.error("⚠️ AI service unavailable. Try again.")
+    st.error("⚠️ AI service temporarily unavailable.")
     return None
 
-
 # ==============================
-# Audio Utilities
+# Utility functions
 # ==============================
 def safe_read_audio(path):
     try:
@@ -101,43 +99,48 @@ def safe_read_audio(path):
         if y.ndim > 1:
             y = np.mean(y, axis=1)
         return y.astype(float), sr
-    except:
-        return np.array([]), 0
-
+    except Exception:
+        audio = AudioSegment.from_file(path)
+        y = np.array(audio.get_array_of_samples()).astype(float)
+        sr = audio.frame_rate
+        return y, sr
 
 @st.cache_data(show_spinner=False)
 def load_audio_energy(path):
-    y, sr = safe_read_audio(path)
-    if len(y) == 0:
+    try:
+        y, sr = safe_read_audio(path)
+        frame_len = int(0.05 * sr)
+        hop = int(0.025 * sr)
+        energies = []
+        for i in range(0, len(y) - frame_len, hop):
+            energies.append(np.mean(np.abs(y[i:i + frame_len])))
+        energies = np.array(energies)
+        if np.max(energies) > 0:
+            energies /= np.max(energies)
+        return energies
+    except Exception:
         return np.array([])
-    frame_len = int(0.05 * sr)
-    hop = int(0.025 * sr)
-    energies = []
-    for i in range(0, len(y) - frame_len, hop):
-        energies.append(np.mean(np.abs(y[i:i + frame_len])))
-    energies = np.array(energies)
-    if len(energies) and np.max(energies) > 0:
-        energies /= np.max(energies)
-    return energies
-
 
 # ==============================
 # Step 1
 # ==============================
 st.header("⚙️ Step 1: Choose Feedback Options")
+col1, col2 = st.columns(2)
+with col1:
+    feedback_lang = st.selectbox("🗣️ Feedback language", ["English", "Hindi"])
+with col2:
+    enable_audio_feedback = st.checkbox("🔊 Generate Audio Feedback", value=False)
 
-feedback_lang = st.selectbox("🗣️ Feedback language", ["English", "Hindi"])
-enable_audio_feedback = st.checkbox("🔊 Generate Audio Feedback", value=False)
 voice_choice = st.selectbox("🎤 Choose AI voice", ["Kore", "Ava", "Wave"])
 
 def map_language_code(lang):
     return "en-US" if lang == "English" else "hi-IN"
 
 # ==============================
-# Step 2 Upload
+# Step 2: Upload Song
 # ==============================
 st.header("🎧 Step 2: Upload Reference Song")
-ref_file = st.file_uploader("Upload song", type=["mp3", "wav"])
+ref_file = st.file_uploader("Upload a song (mp3 or wav)", type=["mp3", "wav"])
 
 if "lyrics_text" not in st.session_state:
     st.session_state.lyrics_text = ""
@@ -156,7 +159,7 @@ if ref_file and not st.session_state.lyrics_text:
             [{
                 "role": "user",
                 "parts": [
-                    {"text": "Extract complete lyrics only."},
+                    {"text": "Extract the complete lyrics from this song and return only the text."},
                     {"inline_data": {"mime_type": "audio/wav", "data": open(tmp_path, "rb").read()}}
                 ]
             }]
@@ -166,17 +169,17 @@ if ref_file and not st.session_state.lyrics_text:
             st.session_state.lyrics_text = response.candidates[0].content.parts[0].text.strip()
 
 if st.session_state.lyrics_text:
-    st.subheader("📜 Extracted Lyrics")
+    st.subheader("📜 Extracted Lyrics (Sing Along)")
     st.markdown(
         f'<div class="lyrics-box">{st.session_state.lyrics_text}</div>',
         unsafe_allow_html=True
     )
 
 # ==============================
-# Step 3 Record
+# Step 3: Record
 # ==============================
 st.header("🎤 Step 3: Record Your Singing")
-recorded_audio_native = st.audio_input("🎙️ Record voice")
+recorded_audio_native = st.audio_input("🎙️ Record your voice")
 
 recorded_file_path = None
 if recorded_audio_native:
@@ -186,57 +189,61 @@ if recorded_audio_native:
     st.success("✅ Recording captured!")
 
 # ==============================
-# Step 4 Evaluation
+# Step 4: Compare + Feedback
 # ==============================
 if st.session_state.ref_tmp_path and recorded_file_path:
 
-    st.subheader("💬 AI Vocal Feedback")
-
-    # Energy check for silence detection
+    ref_energy = load_audio_energy(st.session_state.ref_tmp_path)
     user_energy = load_audio_energy(recorded_file_path)
 
+    # 🔎 Silence Detection
     if len(user_energy) == 0 or np.mean(user_energy) < 0.02:
-        st.error("⚠️ No clear singing detected. Please sing louder and try again.")
-    else:
-        strict_prompt = """
-You are a strict and professional vocal coach.
+        st.error("⚠️ No singing detected. Please sing clearly and try again.")
+        st.stop()
 
-Analyze BOTH the reference song and the user's recording carefully.
+    st.subheader("💬 AI Vocal Feedback")
 
-Evaluate:
-- Pitch accuracy
-- Rhythm/timing
-- Vocal energy
-- Expression
-- Breath control
+    # 🔥 UPDATED STRICT EVALUATION PROMPT
+    evaluation_prompt = """
+You are a strict professional vocal coach.
+
+Analyze the user's singing compared to the reference song.
 
 IMPORTANT RULES:
-- If the user barely sings, sings off-key, is silent, or performs poorly, clearly say it needs improvement.
-- DO NOT automatically praise.
-- Only praise if performance genuinely matches reference.
-- Be honest but constructive.
-- Give a score from 1 to 10.
-- Provide 3 specific improvement tips.
+- If singing is poor, clearly say it needs improvement.
+- If pitch is wrong, say pitch is wrong.
+- If rhythm is off, say rhythm is off.
+- If energy is low, say energy is low.
+- If performance is good, praise specifically why.
+- Do NOT give generic praise.
+- Be honest and objective.
+
+Provide:
+1. Overall Rating (0-100)
+2. Pitch feedback
+3. Rhythm feedback
+4. Energy feedback
+5. Final verdict (Good / Average / Poor)
 """
 
-        response = generate_with_key_rotation(
-            sttmodel,
-            [{
-                "role": "user",
-                "parts": [
-                    {"text": strict_prompt},
-                    {"inline_data": {"mime_type": "audio/wav", "data": open(st.session_state.ref_tmp_path, "rb").read()}},
-                    {"inline_data": {"mime_type": "audio/wav", "data": open(recorded_file_path, "rb").read()}}
-                ]
-            }]
-        )
+    response = generate_with_key_rotation(
+        sttmodel,
+        [{
+            "role": "user",
+            "parts": [
+                {"text": evaluation_prompt},
+                {"inline_data": {"mime_type": "audio/wav", "data": open(st.session_state.ref_tmp_path, "rb").read()}},
+                {"inline_data": {"mime_type": "audio/wav", "data": open(recorded_file_path, "rb").read()}}
+            ]
+        }]
+    )
 
-        if response:
-            feedback_text = response.candidates[0].content.parts[0].text
-        else:
-            feedback_text = "Could not evaluate performance."
+    if response:
+        feedback_text = response.candidates[0].content.parts[0].text
+    else:
+        feedback_text = "Evaluation unavailable."
 
-        st.write(feedback_text)
+    st.write(feedback_text)
 
 else:
-    st.info("Upload song and record to get feedback.")
+    st.info("🎵 Upload a song and record your voice to begin.")
