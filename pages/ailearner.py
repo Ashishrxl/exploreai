@@ -56,34 +56,33 @@ layout="centered"
 )
 
 # ================= API KEYS =================
-def safe_get_secret(key_name, label):
+def safe_get_secret(key_name,label):
     try:
         return st.secrets[key_name]
     except Exception:
         st.warning(f"⚠️ {label} missing")
         return None
 
-api_keys = {
-f"Key {i}": safe_get_secret(f"KEY_{i}", f"Gemini API Key {i}")
-for i in range(1, 12)
+api_keys={
+f"Key {i}":safe_get_secret(f"KEY_{i}",f"Gemini API Key {i}")
+for i in range(1,12)
 }
 
-api_keys = {k: v for k, v in api_keys.items() if v}
+api_keys={k:v for k,v in api_keys.items() if v}
+api_keys=dict(random.sample(list(api_keys.items()),len(api_keys)))
 
-api_keys = dict(random.sample(list(api_keys.items()), len(api_keys)))
-
-YOUTUBE_API_KEY = safe_get_secret("youtube", "YouTube API Key")
-GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN")
+YOUTUBE_API_KEY=safe_get_secret("youtube","YouTube API Key")
+GITHUB_TOKEN=st.secrets.get("GITHUB_TOKEN")
 
 # ================= KEY ROTATION =================
 def get_key_rotation_list():
     return list(api_keys.values())
 
-def gemini_generate(key, prompt):
+def gemini_generate(key,prompt):
 
-    client = genai.Client(api_key=key)
+    client=genai.Client(api_key=key)
 
-    response = client.models.generate_content(
+    response=client.models.generate_content(
     model="gemini-2.5-flash-lite",
     contents=prompt
     )
@@ -93,25 +92,20 @@ def gemini_generate(key, prompt):
 
 def generate_with_key_rotation(prompt):
 
-    keys = get_key_rotation_list()
-
-    for key in keys:
+    for key in get_key_rotation_list():
         try:
-            return gemini_generate(key, prompt)
+            return gemini_generate(key,prompt)
         except Exception:
             continue
 
-    return "⚠️ All API keys failed or quota exceeded."
+    return "⚠️ All API keys failed"
 
 
 def decide_with_key_rotation(prompt):
 
-    keys = get_key_rotation_list()
-
-    for key in keys:
+    for key in get_key_rotation_list():
         try:
-            text = gemini_generate(key, prompt)
-            return json.loads(text)
+            return json.loads(gemini_generate(key,prompt))
         except Exception:
             continue
 
@@ -191,31 +185,7 @@ def search_github(query,max_results=15):
     except Exception:
         return []
 
-# ================= AI LOGIC =================
-def decide_resources(goal,style):
-
-    prompt=f"""
-Decide required resources for learning.
-
-Goal: {goal}
-Learning style: {', '.join(style)}
-
-Return JSON with:
-use_github, use_case_studies, use_practice, use_reading_guides
-"""
-
-    result=decide_with_key_rotation(prompt)
-
-    if not isinstance(result,dict):
-        result={}
-
-    return{
-    "use_github":result.get("use_github",True),
-    "use_case_studies":result.get("use_case_studies",True),
-    "use_practice":result.get("use_practice",True),
-    "use_reading_guides":result.get("use_reading_guides",True),
-    }
-
+# ================= AI =================
 def generate_learning_plan(context):
 
     prompt=f"""
@@ -239,7 +209,6 @@ def simple_llm(prompt):
 def create_pdf():
 
     buffer=BytesIO()
-
     doc=SimpleDocTemplate(buffer,pagesize=letter)
     styles=getSampleStyleSheet()
 
@@ -258,9 +227,10 @@ def create_pdf():
     story.append(Paragraph("Recommended Videos",styles["Heading2"]))
 
     for title,link in st.session_state.videos:
+
         story.append(
         Paragraph(
-        f'<link href="{link}">{title}</link>',
+        f'<font color="blue"><u><a href="{link}">{title}</a></u></font>',
         styles["Normal"]
         )
         )
@@ -272,7 +242,7 @@ def create_pdf():
 
         story.append(
         Paragraph(
-        f'<link href="{repo["url"]}">{repo["name"]}</link>',
+        f'<font color="blue"><u><a href="{repo["url"]}">{repo["name"]}</a></u></font>',
         styles["Normal"]
         )
         )
@@ -351,10 +321,6 @@ Style: {', '.join(style)}
 
         st.session_state.learning_plan=generate_learning_plan(context)
 
-        st.session_state.resource_decision=decide_resources(goal,style)
-
-        st.session_state.history.append(st.session_state.learning_plan)
-
         st.session_state.videos=search_youtube(goal)
 
         st.session_state.repos=search_github(goal)
@@ -364,6 +330,8 @@ Style: {', '.join(style)}
         st.session_state.practice=simple_llm(f"Create 5 exercises for {goal}")
 
         st.session_state.reading=simple_llm(f"Create reading guide for {goal}")
+
+        st.session_state.history.append(st.session_state.learning_plan)
 
 # ================= DISPLAY =================
 if st.session_state.learning_plan:
@@ -377,39 +345,25 @@ if st.session_state.learning_plan:
     for title,link in st.session_state.videos:
         st.markdown(f"- [{title}]({link})")
 
-    if st.session_state.resource_decision.get("use_github",True):
+    st.subheader("💻 GitHub Projects")
 
-        st.subheader("💻 GitHub Projects")
+    for repo in st.session_state.repos:
+        st.markdown(
+        f"- **[{repo['name']}]({repo['url']})**  \n_{repo['description']}_"
+        )
 
-        if st.session_state.repos:
+    st.subheader("📚 Case Studies")
+    st.markdown(st.session_state.case_studies)
 
-            for repo in st.session_state.repos:
+    st.subheader("🧪 Practice")
+    st.markdown(st.session_state.practice)
 
-                st.markdown(
-                f"- **[{repo['name']}]({repo['url']})**  \n_{repo['description']}_"
-                )
-
-        else:
-            st.info("No GitHub repositories found.")
-
-    if st.session_state.resource_decision.get("use_case_studies",True):
-
-        st.subheader("📚 Case Studies")
-        st.markdown(st.session_state.case_studies)
-
-    if st.session_state.resource_decision.get("use_practice",True):
-
-        st.subheader("🧪 Practice")
-        st.markdown(st.session_state.practice)
-
-    if st.session_state.resource_decision.get("use_reading_guides",True):
-
-        st.subheader("📖 Reading Guide")
-        st.markdown(st.session_state.reading)
+    st.subheader("📖 Reading Guide")
+    st.markdown(st.session_state.reading)
 
     st.divider()
 
-# ================= DOWNLOAD PDF =================
+# ================= DOWNLOAD =================
 if st.session_state.learning_plan:
 
     st.download_button(
