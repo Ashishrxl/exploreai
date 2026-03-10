@@ -11,9 +11,9 @@ from reportlab.lib.pagesizes import letter
 from io import BytesIO
 
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    force=True
+level=logging.INFO,
+format="%(asctime)s - %(levelname)s - %(message)s",
+force=True
 )
 
 html(
@@ -84,8 +84,8 @@ def gemini_generate(key, prompt):
     client = genai.Client(api_key=key)
 
     response = client.models.generate_content(
-        model="gemini-2.5-flash-lite",
-        contents=prompt
+    model="gemini-2.5-flash-lite",
+    contents=prompt
     )
 
     return response.text
@@ -118,83 +118,83 @@ def decide_with_key_rotation(prompt):
     return None
 
 # ================= SESSION =================
-st.session_state.setdefault("learning_plan", "")
-st.session_state.setdefault("history", [])
-st.session_state.setdefault("resource_decision", {})
-st.session_state.setdefault("videos", [])
-st.session_state.setdefault("repos", [])
-st.session_state.setdefault("case_studies", "")
-st.session_state.setdefault("practice", "")
-st.session_state.setdefault("reading", "")
+st.session_state.setdefault("learning_plan","")
+st.session_state.setdefault("history",[])
+st.session_state.setdefault("resource_decision",{})
+st.session_state.setdefault("videos",[])
+st.session_state.setdefault("repos",[])
+st.session_state.setdefault("case_studies","")
+st.session_state.setdefault("practice","")
+st.session_state.setdefault("reading","")
 
 # ================= YOUTUBE =================
-def search_youtube(query, max_results=20):
+def search_youtube(query,max_results=20):
 
     if not YOUTUBE_API_KEY:
         return []
 
     try:
 
-        url = "https://www.googleapis.com/youtube/v3/search"
+        url="https://www.googleapis.com/youtube/v3/search"
 
-        params = {
-        "part": "snippet",
-        "q": query,
-        "key": YOUTUBE_API_KEY,
-        "maxResults": max_results,
-        "type": "video"
+        params={
+        "part":"snippet",
+        "q":query,
+        "key":YOUTUBE_API_KEY,
+        "maxResults":max_results,
+        "type":"video"
         }
 
-        r = requests.get(url, params=params, timeout=10)
+        r=requests.get(url,params=params,timeout=10)
         r.raise_for_status()
 
         return [
         (i["snippet"]["title"],
         f"https://www.youtube.com/watch?v={i['id']['videoId']}")
-        for i in r.json().get("items", [])
+        for i in r.json().get("items",[])
         ]
 
     except Exception:
         return []
 
 # ================= GITHUB =================
-def search_github(query, max_results=15):
+def search_github(query,max_results=15):
 
     try:
 
-        url = "https://api.github.com/search/repositories"
+        url="https://api.github.com/search/repositories"
 
-        headers = {"Accept": "application/vnd.github+json"}
+        headers={"Accept":"application/vnd.github+json"}
 
         if GITHUB_TOKEN:
-            headers["Authorization"] = f"token {GITHUB_TOKEN}"
+            headers["Authorization"]=f"token {GITHUB_TOKEN}"
 
-        params = {
-        "q": query,
-        "sort": "stars",
-        "order": "desc",
-        "per_page": max_results
+        params={
+        "q":query,
+        "sort":"stars",
+        "order":"desc",
+        "per_page":max_results
         }
 
-        r = requests.get(url, headers=headers, params=params, timeout=10)
+        r=requests.get(url,headers=headers,params=params,timeout=10)
         r.raise_for_status()
 
         return [
         {
-        "name": item["full_name"],
-        "url": item["html_url"],
-        "description": item["description"] or "No description"
+        "name":item["full_name"],
+        "url":item["html_url"],
+        "description":item["description"] or "No description"
         }
-        for item in r.json().get("items", [])
+        for item in r.json().get("items",[])
         ]
 
     except Exception:
         return []
 
 # ================= AI LOGIC =================
-def decide_resources(goal, style):
+def decide_resources(goal,style):
 
-    prompt = f"""
+    prompt=f"""
 Decide required resources for learning.
 
 Goal: {goal}
@@ -204,21 +204,21 @@ Return JSON with:
 use_github, use_case_studies, use_practice, use_reading_guides
 """
 
-    result = decide_with_key_rotation(prompt)
+    result=decide_with_key_rotation(prompt)
 
-    if not isinstance(result, dict):
-        result = {}
+    if not isinstance(result,dict):
+        result={}
 
-    return {
-    "use_github": result.get("use_github", True),
-    "use_case_studies": result.get("use_case_studies", True),
-    "use_practice": result.get("use_practice", True),
-    "use_reading_guides": result.get("use_reading_guides", True),
+    return{
+    "use_github":result.get("use_github",True),
+    "use_case_studies":result.get("use_case_studies",True),
+    "use_practice":result.get("use_practice",True),
+    "use_reading_guides":result.get("use_reading_guides",True),
     }
 
 def generate_learning_plan(context):
 
-    prompt = f"""
+    prompt=f"""
 Create a personalized learning plan with:
 - Weekly roadmap
 - Daily tasks
@@ -238,57 +238,68 @@ def simple_llm(prompt):
 # ================= PDF =================
 def create_pdf():
 
-    buffer = BytesIO()
+    buffer=BytesIO()
 
-    doc = SimpleDocTemplate(buffer, pagesize=letter)
-    styles = getSampleStyleSheet()
+    doc=SimpleDocTemplate(buffer,pagesize=letter)
+    styles=getSampleStyleSheet()
 
-    story = []
+    story=[]
 
-    story.append(Paragraph("AI Learner Report", styles["Title"]))
+    story.append(Paragraph("AI Learner Report",styles["Title"]))
     story.append(Spacer(1,20))
 
-    story.append(Paragraph("Learning Plan", styles["Heading2"]))
+    story.append(Paragraph("Learning Plan",styles["Heading2"]))
 
     for line in st.session_state.learning_plan.split("\n"):
-        story.append(Paragraph(line, styles["Normal"]))
+        story.append(Paragraph(line,styles["Normal"]))
         story.append(Spacer(1,5))
 
     story.append(Spacer(1,20))
-    story.append(Paragraph("Recommended Videos", styles["Heading2"]))
+    story.append(Paragraph("Recommended Videos",styles["Heading2"]))
 
-    for title, link in st.session_state.videos:
-        story.append(Paragraph(f"{title} - {link}", styles["Normal"]))
+    for title,link in st.session_state.videos:
+        story.append(
+        Paragraph(
+        f'<link href="{link}">{title}</link>',
+        styles["Normal"]
+        )
+        )
 
     story.append(Spacer(1,20))
-    story.append(Paragraph("GitHub Projects", styles["Heading2"]))
+    story.append(Paragraph("GitHub Projects",styles["Heading2"]))
 
     for repo in st.session_state.repos:
 
-        story.append(Paragraph(f"{repo['name']} - {repo['url']}", styles["Normal"]))
-        story.append(Paragraph(repo["description"], styles["Normal"]))
+        story.append(
+        Paragraph(
+        f'<link href="{repo["url"]}">{repo["name"]}</link>',
+        styles["Normal"]
+        )
+        )
+
+        story.append(Paragraph(repo["description"],styles["Normal"]))
         story.append(Spacer(1,10))
 
     if st.session_state.case_studies:
 
-        story.append(Paragraph("Case Studies", styles["Heading2"]))
+        story.append(Paragraph("Case Studies",styles["Heading2"]))
 
         for line in st.session_state.case_studies.split("\n"):
-            story.append(Paragraph(line, styles["Normal"]))
+            story.append(Paragraph(line,styles["Normal"]))
 
     if st.session_state.practice:
 
-        story.append(Paragraph("Practice Exercises", styles["Heading2"]))
+        story.append(Paragraph("Practice Exercises",styles["Heading2"]))
 
         for line in st.session_state.practice.split("\n"):
-            story.append(Paragraph(line, styles["Normal"]))
+            story.append(Paragraph(line,styles["Normal"]))
 
     if st.session_state.reading:
 
-        story.append(Paragraph("Reading Guide", styles["Heading2"]))
+        story.append(Paragraph("Reading Guide",styles["Heading2"]))
 
         for line in st.session_state.reading.split("\n"):
-            story.append(Paragraph(line, styles["Normal"]))
+            story.append(Paragraph(line,styles["Normal"]))
 
     doc.build(story)
 
@@ -303,37 +314,32 @@ st.divider()
 
 with st.form("onboarding"):
 
-    goal = st.text_input("🎯 Learning Goal")
+    goal=st.text_input("🎯 Learning Goal")
 
-    level = st.selectbox(
+    level=st.selectbox(
     "📊 Current Level",
     ["Beginner","Intermediate","Advanced"]
     )
 
-    time_per_day = st.slider(
-    "⏱️ Daily Time",
-    30,
-    180,
-    60
-    )
+    time_per_day=st.slider("⏱️ Daily Time",30,180,60)
 
-    duration = st.selectbox(
+    duration=st.selectbox(
     "📆 Duration",
     ["1 Month","3 Months","6 Months"]
     )
 
-    style = st.multiselect(
+    style=st.multiselect(
     "🎧 Style",
     ["Videos","Articles","Hands-on Projects"],
     default=["Videos"]
     )
 
-    submitted = st.form_submit_button("🚀 Generate")
+    submitted=st.form_submit_button("🚀 Generate")
 
 # ================= GENERATION =================
 if submitted and goal:
 
-    context = f"""
+    context=f"""
 Goal: {goal}
 Level: {level}
 Time: {time_per_day}
@@ -343,21 +349,21 @@ Style: {', '.join(style)}
 
     with st.spinner("🧠 Generating..."):
 
-        st.session_state.learning_plan = generate_learning_plan(context)
+        st.session_state.learning_plan=generate_learning_plan(context)
 
-        st.session_state.resource_decision = decide_resources(goal, style)
+        st.session_state.resource_decision=decide_resources(goal,style)
 
         st.session_state.history.append(st.session_state.learning_plan)
 
-        st.session_state.videos = search_youtube(goal)
+        st.session_state.videos=search_youtube(goal)
 
-        st.session_state.repos = search_github(goal)
+        st.session_state.repos=search_github(goal)
 
-        st.session_state.case_studies = simple_llm(f"Give 3 case studies about {goal}")
+        st.session_state.case_studies=simple_llm(f"Give 3 case studies about {goal}")
 
-        st.session_state.practice = simple_llm(f"Create 5 exercises for {goal}")
+        st.session_state.practice=simple_llm(f"Create 5 exercises for {goal}")
 
-        st.session_state.reading = simple_llm(f"Create reading guide for {goal}")
+        st.session_state.reading=simple_llm(f"Create reading guide for {goal}")
 
 # ================= DISPLAY =================
 if st.session_state.learning_plan:
@@ -368,7 +374,7 @@ if st.session_state.learning_plan:
 
     st.subheader("📺 Recommended Videos")
 
-    for title, link in st.session_state.videos:
+    for title,link in st.session_state.videos:
         st.markdown(f"- [{title}]({link})")
 
     if st.session_state.resource_decision.get("use_github",True):
@@ -419,7 +425,5 @@ with st.expander("🗂️ History"):
     for i,h in enumerate(st.session_state.history):
 
         st.markdown(f"### Version {i+1}")
-
         st.markdown(h)
-
         st.divider()
