@@ -80,6 +80,7 @@ def get_key_rotation_list():
     return list(api_keys.values())
 
 def gemini_generate(key, prompt):
+
     client = genai.Client(api_key=key)
 
     response = client.models.generate_content(
@@ -248,6 +249,7 @@ def create_pdf():
     story.append(Spacer(1,20))
 
     story.append(Paragraph("Learning Plan", styles["Heading2"]))
+
     for line in st.session_state.learning_plan.split("\n"):
         story.append(Paragraph(line, styles["Normal"]))
         story.append(Spacer(1,5))
@@ -262,22 +264,29 @@ def create_pdf():
     story.append(Paragraph("GitHub Projects", styles["Heading2"]))
 
     for repo in st.session_state.repos:
+
         story.append(Paragraph(f"{repo['name']} - {repo['url']}", styles["Normal"]))
         story.append(Paragraph(repo["description"], styles["Normal"]))
         story.append(Spacer(1,10))
 
     if st.session_state.case_studies:
+
         story.append(Paragraph("Case Studies", styles["Heading2"]))
+
         for line in st.session_state.case_studies.split("\n"):
             story.append(Paragraph(line, styles["Normal"]))
 
     if st.session_state.practice:
+
         story.append(Paragraph("Practice Exercises", styles["Heading2"]))
+
         for line in st.session_state.practice.split("\n"):
             story.append(Paragraph(line, styles["Normal"]))
 
     if st.session_state.reading:
+
         story.append(Paragraph("Reading Guide", styles["Heading2"]))
+
         for line in st.session_state.reading.split("\n"):
             story.append(Paragraph(line, styles["Normal"]))
 
@@ -296,13 +305,22 @@ with st.form("onboarding"):
 
     goal = st.text_input("🎯 Learning Goal")
 
-    level = st.selectbox("📊 Current Level",
-    ["Beginner","Intermediate","Advanced"])
+    level = st.selectbox(
+    "📊 Current Level",
+    ["Beginner","Intermediate","Advanced"]
+    )
 
-    time_per_day = st.slider("⏱️ Daily Time",30,180,60)
+    time_per_day = st.slider(
+    "⏱️ Daily Time",
+    30,
+    180,
+    60
+    )
 
-    duration = st.selectbox("📆 Duration",
-    ["1 Month","3 Months","6 Months"])
+    duration = st.selectbox(
+    "📆 Duration",
+    ["1 Month","3 Months","6 Months"]
+    )
 
     style = st.multiselect(
     "🎧 Style",
@@ -346,14 +364,6 @@ if st.session_state.learning_plan:
 
     st.subheader("📘 Your Learning Plan")
     st.markdown(st.session_state.learning_plan)
-
-    st.download_button(
-    label="📥 Download Full Learning Report PDF",
-    data=create_pdf(),
-    file_name="AI_Learner_Report.pdf",
-    mime="application/pdf"
-    )
-
     st.divider()
 
     st.subheader("📺 Recommended Videos")
@@ -393,11 +403,23 @@ if st.session_state.learning_plan:
 
     st.divider()
 
+# ================= DOWNLOAD PDF =================
+if st.session_state.learning_plan:
+
+    st.download_button(
+    label="📥 Download Full Learning Report PDF",
+    data=create_pdf(),
+    file_name="AI_Learner_Report.pdf",
+    mime="application/pdf"
+    )
+
 # ================= HISTORY =================
 with st.expander("🗂️ History"):
 
     for i,h in enumerate(st.session_state.history):
 
         st.markdown(f"### Version {i+1}")
+
         st.markdown(h)
+
         st.divider()
