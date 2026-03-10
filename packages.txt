@@ -1,3 +1,2 @@
 ffmpeg
-libmagic1
 portaudio19-dev
