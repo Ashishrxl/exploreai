@@ -1,10 +1,14 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 import requests
 import json
 import random
 from streamlit.components.v1 import html
 import logging
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.pagesizes import letter
+from io import BytesIO
 
 logging.basicConfig(
     level=logging.INFO,
@@ -12,23 +16,22 @@ logging.basicConfig(
     force=True
 )
 
-
 html(
-  """
-  <script>
-  try {
-    const sel = window.top.document.querySelectorAll('[href*="streamlit.io"], [href*="streamlit.app"]');
-    sel.forEach(e => e.style.display='none');
-  } catch(e) { console.warn('parent DOM not reachable', e); }
-  </script>
-  """,
-  height=0
+"""
+<script>
+try {
+const sel = window.top.document.querySelectorAll('[href*="streamlit.io"], [href*="streamlit.app"]');
+sel.forEach(e => e.style.display='none');
+} catch(e) { console.warn('parent DOM not reachable', e); }
+</script>
+""",
+height=0
 )
 
 disable_footer_click = """
-    <style>
-    footer {pointer-events: none;}
-    </style>
+<style>
+footer {pointer-events: none;}
+</style>
 """
 st.markdown(disable_footer_click, unsafe_allow_html=True)
 
@@ -47,9 +50,9 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 # ================= PAGE CONFIG =================
 st.set_page_config(
-    page_title="AI Learner",
-    page_icon="🎓",
-    layout="centered"
+page_title="AI Learner",
+page_icon="🎓",
+layout="centered"
 )
 
 # ================= API KEYS =================
@@ -61,18 +64,13 @@ def safe_get_secret(key_name, label):
         return None
 
 api_keys = {
-    f"Key {i}": safe_get_secret(f"KEY_{i}", f"Gemini API Key {i}")
-    for i in range(1, 12)
+f"Key {i}": safe_get_secret(f"KEY_{i}", f"Gemini API Key {i}")
+for i in range(1, 12)
 }
-
 
 api_keys = {k: v for k, v in api_keys.items() if v}
 
-
 api_keys = dict(random.sample(list(api_keys.items()), len(api_keys)))
-
-
-
 
 YOUTUBE_API_KEY = safe_get_secret("youtube", "YouTube API Key")
 GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN")
@@ -81,36 +79,63 @@ GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN")
 def get_key_rotation_list():
     return list(api_keys.values())
 
+def gemini_generate(key, prompt):
+
+    client = genai.Client(api_key=key)
+
+    response = client.models.generate_content(
+        model="gemini-2.5-flash-lite",
+        contents=prompt
+    )
+
+    return response.text
+
+
 def generate_with_key_rotation(prompt):
+
     keys = get_key_rotation_list()
 
-    for i, key in enumerate(keys):
+    for key in keys:
         try:
-            genai.configure(api_key=key)
-            model = genai.GenerativeModel("gemini-2.5-flash-lite")
-            
-            return model.generate_content(prompt).text
-
+            return gemini_generate(key, prompt)
         except Exception:
             continue
 
     return "⚠️ All API keys failed or quota exceeded."
 
+
 def decide_with_key_rotation(prompt):
+
     keys = get_key_rotation_list()
 
-    for i, key in enumerate(keys):
+    for key in keys:
         try:
-            genai.configure(api_key=key)
-            model = genai.GenerativeModel("gemini-2.5-flash-lite")
-                
-
-            return json.loads(model.generate_content(prompt).text)
-
+            text = gemini_generate(key, prompt)
+            return json.loads(text)
         except Exception:
             continue
 
     return None
+
+# ================= PDF GENERATOR =================
+def create_pdf(text):
+
+    buffer = BytesIO()
+
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    styles = getSampleStyleSheet()
+
+    story = []
+
+    for line in text.split("\n"):
+        story.append(Paragraph(line, styles["Normal"]))
+        story.append(Spacer(1, 8))
+
+    doc.build(story)
+
+    buffer.seek(0)
+
+    return buffer
 
 # ================= SESSION =================
 st.session_state.setdefault("learning_plan", "")
@@ -119,56 +144,65 @@ st.session_state.setdefault("resource_decision", {})
 
 # ================= YOUTUBE =================
 def search_youtube(query, max_results=20):
+
     if not YOUTUBE_API_KEY:
         return []
 
     try:
+
         url = "https://www.googleapis.com/youtube/v3/search"
+
         params = {
-            "part": "snippet",
-            "q": query,
-            "key": YOUTUBE_API_KEY,
-            "maxResults": max_results,
-            "type": "video"
+        "part": "snippet",
+        "q": query,
+        "key": YOUTUBE_API_KEY,
+        "maxResults": max_results,
+        "type": "video"
         }
 
         r = requests.get(url, params=params, timeout=10)
+
         r.raise_for_status()
 
         return [
-            (i["snippet"]["title"],
-             f"https://www.youtube.com/watch?v={i['id']['videoId']}")
-            for i in r.json().get("items", [])
+        (i["snippet"]["title"],
+        f"https://www.youtube.com/watch?v={i['id']['videoId']}")
+        for i in r.json().get("items", [])
         ]
+
     except Exception:
         return []
 
 # ================= GITHUB =================
 def search_github(query, max_results=15):
+
     try:
+
         url = "https://api.github.com/search/repositories"
 
         headers = {"Accept": "application/vnd.github+json"}
+
         if GITHUB_TOKEN:
             headers["Authorization"] = f"token {GITHUB_TOKEN}"
 
         params = {
-            "q": query,
-            "sort": "stars",
-            "order": "desc",
-            "per_page": max_results
+        "q": query,
+        "sort": "stars",
+        "order": "desc",
+        "per_page": max_results
         }
 
         r = requests.get(url, headers=headers, params=params, timeout=10)
+
         r.raise_for_status()
 
         return [
-            {
-                "name": item["full_name"],
-                "url": item["html_url"],
-                "description": item["description"] or "No description"
-            }
-            for item in r.json().get("items", [])
+        {
+        "name": item["full_name"],
+        "url": item["html_url"],
+        "description": item["description"] or "No description"
+        }
+        for item in r.json().get("items", [])
         ]
 
     except Exception:
@@ -193,13 +227,14 @@ use_github, use_case_studies, use_practice, use_reading_guides
         result = {}
 
     return {
-        "use_github": result.get("use_github", True),
-        "use_case_studies": result.get("use_case_studies", True),
-        "use_practice": result.get("use_practice", True),
-        "use_reading_guides": result.get("use_reading_guides", True),
+    "use_github": result.get("use_github", True),
+    "use_case_studies": result.get("use_case_studies", True),
+    "use_practice": result.get("use_practice", True),
+    "use_reading_guides": result.get("use_reading_guides", True),
     }
 
 def generate_learning_plan(context):
+
     prompt = f"""
 Create a personalized learning plan with:
 - Weekly roadmap
@@ -210,7 +245,9 @@ Create a personalized learning plan with:
 Context:
 {context}
 """
+
     return generate_with_key_rotation(prompt)
+
 
 def simple_llm(prompt):
     return generate_with_key_rotation(prompt)
@@ -222,22 +259,37 @@ st.divider()
 
 # ================= FORM =================
 with st.form("onboarding"):
+
     goal = st.text_input("🎯 Learning Goal")
-    level = st.selectbox("📊 Current Level",
-                         ["Beginner", "Intermediate", "Advanced"])
-    time_per_day = st.slider("⏱️ Daily Time", 30, 180, 60)
-    duration = st.selectbox("📆 Duration",
-                            ["1 Month", "3 Months", "6 Months"])
+
+    level = st.selectbox(
+    "📊 Current Level",
+    ["Beginner", "Intermediate", "Advanced"]
+    )
+
+    time_per_day = st.slider(
+    "⏱️ Daily Time",
+    30,
+    180,
+    60
+    )
+
+    duration = st.selectbox(
+    "📆 Duration",
+    ["1 Month", "3 Months", "6 Months"]
+    )
+
     style = st.multiselect(
-        "🎧 Style",
-        ["Videos", "Articles", "Hands-on Projects"],
-        default=["Videos"]
+    "🎧 Style",
+    ["Videos", "Articles", "Hands-on Projects"],
+    default=["Videos"]
     )
 
     submitted = st.form_submit_button("🚀 Generate")
 
 # ================= GENERATION =================
 if submitted and goal:
+
     context = f"""
 Goal: {goal}
 Level: {level}
@@ -247,54 +299,96 @@ Style: {', '.join(style)}
 """
 
     with st.spinner("🧠 Generating..."):
+
         st.session_state.learning_plan = generate_learning_plan(context)
+
         st.session_state.resource_decision = decide_resources(goal, style)
-        st.session_state.history.append(st.session_state.learning_plan)
+
+        st.session_state.history.append(
+        st.session_state.learning_plan
+        )
 
 # ================= DISPLAY =================
 if st.session_state.learning_plan:
+
     st.subheader("📘 Your Learning Plan")
+
     st.markdown(st.session_state.learning_plan)
+
+    pdf_file = create_pdf(
+    st.session_state.learning_plan
+    )
+
+    st.download_button(
+    label="📥 Download Learning Plan PDF",
+    data=pdf_file,
+    file_name="learning_plan.pdf",
+    mime="application/pdf"
+    )
+
     st.divider()
 
     # YouTube
     st.subheader("📺 Recommended Videos")
+
     for title, link in search_youtube(goal):
         st.markdown(f"- [{title}]({link})")
 
-    # GitHub (Guaranteed Show)
+    # GitHub
     if st.session_state.resource_decision.get("use_github", True):
+
         st.subheader("💻 GitHub Projects")
+
         repos = search_github(goal)
 
         if repos:
+
             for repo in repos:
+
                 st.markdown(
-                    f"- **[{repo['name']}]({repo['url']})**  \n_{repo['description']}_"
+                f"- **[{repo['name']}]({repo['url']})**  \n_{repo['description']}_"
                 )
+
         else:
+
             st.info("No GitHub repositories found.")
 
     # Case Studies
     if st.session_state.resource_decision.get("use_case_studies", True):
+
         st.subheader("📚 Case Studies")
-        st.markdown(simple_llm(f"Give 3 case studies about {goal}"))
+
+        st.markdown(
+        simple_llm(f"Give 3 case studies about {goal}")
+        )
 
     # Practice
     if st.session_state.resource_decision.get("use_practice", True):
+
         st.subheader("🧪 Practice")
-        st.markdown(simple_llm(f"Create 5 exercises for {goal}"))
+
+        st.markdown(
+        simple_llm(f"Create 5 exercises for {goal}")
+        )
 
     # Reading
     if st.session_state.resource_decision.get("use_reading_guides", True):
+
         st.subheader("📖 Reading Guide")
-        st.markdown(simple_llm(f"Create reading guide for {goal}"))
+
+        st.markdown(
+        simple_llm(f"Create reading guide for {goal}")
+        )
 
     st.divider()
 
 # ================= HISTORY =================
 with st.expander("🗂️ History"):
+
     for i, h in enumerate(st.session_state.history):
+
         st.markdown(f"### Version {i+1}")
+
         st.markdown(h)
+
         st.divider()
