@@ -1,59 +1,48 @@
-reportlab
-Pillow
+streamlit>=1.32.0
 
+pandas>=2.1.0
+numpy>=1.26.0
+plotly>=5.18.0
+matplotlib>=3.8.0
+seaborn>=0.13.0
+statsmodels>=0.14.1
+
+openpyxl>=3.1.2
 xlsxwriter
+kaleido
 
-google-generativeai
-langchain-google-genai
-langchain-experimental
-tabulate
 scipy
-streamlit-webrtc
 
-# Secure CSV Visualizer - Requirements
-streamlit>=1.28.0
-pandas>=2.0.0
-numpy>=1.24.0
-plotly>=5.15.0
-prophet>=1.1.4
-seaborn>=0.12.0
-matplotlib>=3.7.0
-statsmodels>=0.14.0
-openpyxl>=3.1.0
-kaleido>=0.2.1
+prophet
 
-
-streamlit-audiorecorder
-audioread
-google-genai
-soundfile
-
+tabulate
 
 requests
 
+reportlab
+Pillow
 
+PyPDF2
+python-docx
 
+# Google AI
+google-genai>=0.3.0
+langchain-google-genai
+langchain-experimental
 
+# Audio
+streamlit-audiorecorder
+audioread
+soundfile
 speechrecognition
-sounddevice
 gTTS
 langdetect
+pydub
 
-
+# Realtime streaming
 streamlit-webrtc>=0.47.0
-google-genai>=0.3.0
-pyaudio>=0.2.13
-
-
 websockets>=12.0
 aiortc>=1.5.0
 av>=10.0.0
-asyncio>=3.4.3
 
-PyPDF2 
-python-docx
-
-
-# Sing perfect
-pydub==0.25.1
-protobuf==5.28.2
+protobuf>=5.28.2
