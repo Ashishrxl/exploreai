@@ -22,7 +22,7 @@ html(
 try {
 const sel = window.top.document.querySelectorAll('[href*="streamlit.io"], [href*="streamlit.app"]');
 sel.forEach(e => e.style.display='none');
-} catch(e) { console.warn('parent DOM not reachable', e); }
+} catch(e) {}
 </script>
 """,
 height=0
@@ -80,7 +80,6 @@ def get_key_rotation_list():
     return list(api_keys.values())
 
 def gemini_generate(key, prompt):
-
     client = genai.Client(api_key=key)
 
     response = client.models.generate_content(
@@ -117,30 +116,15 @@ def decide_with_key_rotation(prompt):
 
     return None
 
-# ================= PDF GENERATOR =================
-def create_pdf(text):
-
-    buffer = BytesIO()
-
-    doc = SimpleDocTemplate(buffer, pagesize=letter)
-    styles = getSampleStyleSheet()
-
-    story = []
-
-    for line in text.split("\n"):
-        story.append(Paragraph(line, styles["Normal"]))
-        story.append(Spacer(1, 8))
-
-    doc.build(story)
-
-    buffer.seek(0)
-
-    return buffer
-
 # ================= SESSION =================
 st.session_state.setdefault("learning_plan", "")
 st.session_state.setdefault("history", [])
 st.session_state.setdefault("resource_decision", {})
+st.session_state.setdefault("videos", [])
+st.session_state.setdefault("repos", [])
+st.session_state.setdefault("case_studies", "")
+st.session_state.setdefault("practice", "")
+st.session_state.setdefault("reading", "")
 
 # ================= YOUTUBE =================
 def search_youtube(query, max_results=20):
@@ -161,7 +145,6 @@ def search_youtube(query, max_results=20):
         }
 
         r = requests.get(url, params=params, timeout=10)
-
         r.raise_for_status()
 
         return [
@@ -193,7 +176,6 @@ def search_github(query, max_results=15):
         }
 
         r = requests.get(url, headers=headers, params=params, timeout=10)
-
         r.raise_for_status()
 
         return [
@@ -252,36 +234,79 @@ Context:
 def simple_llm(prompt):
     return generate_with_key_rotation(prompt)
 
+# ================= PDF =================
+def create_pdf():
+
+    buffer = BytesIO()
+
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    styles = getSampleStyleSheet()
+
+    story = []
+
+    story.append(Paragraph("AI Learner Report", styles["Title"]))
+    story.append(Spacer(1,20))
+
+    story.append(Paragraph("Learning Plan", styles["Heading2"]))
+    for line in st.session_state.learning_plan.split("\n"):
+        story.append(Paragraph(line, styles["Normal"]))
+        story.append(Spacer(1,5))
+
+    story.append(Spacer(1,20))
+    story.append(Paragraph("Recommended Videos", styles["Heading2"]))
+
+    for title, link in st.session_state.videos:
+        story.append(Paragraph(f"{title} - {link}", styles["Normal"]))
+
+    story.append(Spacer(1,20))
+    story.append(Paragraph("GitHub Projects", styles["Heading2"]))
+
+    for repo in st.session_state.repos:
+        story.append(Paragraph(f"{repo['name']} - {repo['url']}", styles["Normal"]))
+        story.append(Paragraph(repo["description"], styles["Normal"]))
+        story.append(Spacer(1,10))
+
+    if st.session_state.case_studies:
+        story.append(Paragraph("Case Studies", styles["Heading2"]))
+        for line in st.session_state.case_studies.split("\n"):
+            story.append(Paragraph(line, styles["Normal"]))
+
+    if st.session_state.practice:
+        story.append(Paragraph("Practice Exercises", styles["Heading2"]))
+        for line in st.session_state.practice.split("\n"):
+            story.append(Paragraph(line, styles["Normal"]))
+
+    if st.session_state.reading:
+        story.append(Paragraph("Reading Guide", styles["Heading2"]))
+        for line in st.session_state.reading.split("\n"):
+            story.append(Paragraph(line, styles["Normal"]))
+
+    doc.build(story)
+
+    buffer.seek(0)
+
+    return buffer
+
 # ================= UI =================
 st.title("🎓 AI Learner")
 st.caption("Gemini • YouTube • Adaptive Resources")
 st.divider()
 
-# ================= FORM =================
 with st.form("onboarding"):
 
     goal = st.text_input("🎯 Learning Goal")
 
-    level = st.selectbox(
-    "📊 Current Level",
-    ["Beginner", "Intermediate", "Advanced"]
-    )
+    level = st.selectbox("📊 Current Level",
+    ["Beginner","Intermediate","Advanced"])
 
-    time_per_day = st.slider(
-    "⏱️ Daily Time",
-    30,
-    180,
-    60
-    )
+    time_per_day = st.slider("⏱️ Daily Time",30,180,60)
 
-    duration = st.selectbox(
-    "📆 Duration",
-    ["1 Month", "3 Months", "6 Months"]
-    )
+    duration = st.selectbox("📆 Duration",
+    ["1 Month","3 Months","6 Months"])
 
     style = st.multiselect(
     "🎧 Style",
-    ["Videos", "Articles", "Hands-on Projects"],
+    ["Videos","Articles","Hands-on Projects"],
     default=["Videos"]
     )
 
@@ -304,91 +329,75 @@ Style: {', '.join(style)}
 
         st.session_state.resource_decision = decide_resources(goal, style)
 
-        st.session_state.history.append(
-        st.session_state.learning_plan
-        )
+        st.session_state.history.append(st.session_state.learning_plan)
+
+        st.session_state.videos = search_youtube(goal)
+
+        st.session_state.repos = search_github(goal)
+
+        st.session_state.case_studies = simple_llm(f"Give 3 case studies about {goal}")
+
+        st.session_state.practice = simple_llm(f"Create 5 exercises for {goal}")
+
+        st.session_state.reading = simple_llm(f"Create reading guide for {goal}")
 
 # ================= DISPLAY =================
 if st.session_state.learning_plan:
 
     st.subheader("📘 Your Learning Plan")
-
     st.markdown(st.session_state.learning_plan)
 
-    pdf_file = create_pdf(
-    st.session_state.learning_plan
-    )
-
     st.download_button(
-    label="📥 Download Learning Plan PDF",
-    data=pdf_file,
-    file_name="learning_plan.pdf",
+    label="📥 Download Full Learning Report PDF",
+    data=create_pdf(),
+    file_name="AI_Learner_Report.pdf",
     mime="application/pdf"
     )
 
     st.divider()
 
-    # YouTube
     st.subheader("📺 Recommended Videos")
 
-    for title, link in search_youtube(goal):
+    for title, link in st.session_state.videos:
         st.markdown(f"- [{title}]({link})")
 
-    # GitHub
-    if st.session_state.resource_decision.get("use_github", True):
+    if st.session_state.resource_decision.get("use_github",True):
 
         st.subheader("💻 GitHub Projects")
 
-        repos = search_github(goal)
+        if st.session_state.repos:
 
-        if repos:
-
-            for repo in repos:
+            for repo in st.session_state.repos:
 
                 st.markdown(
                 f"- **[{repo['name']}]({repo['url']})**  \n_{repo['description']}_"
                 )
 
         else:
-
             st.info("No GitHub repositories found.")
 
-    # Case Studies
-    if st.session_state.resource_decision.get("use_case_studies", True):
+    if st.session_state.resource_decision.get("use_case_studies",True):
 
         st.subheader("📚 Case Studies")
+        st.markdown(st.session_state.case_studies)
 
-        st.markdown(
-        simple_llm(f"Give 3 case studies about {goal}")
-        )
-
-    # Practice
-    if st.session_state.resource_decision.get("use_practice", True):
+    if st.session_state.resource_decision.get("use_practice",True):
 
         st.subheader("🧪 Practice")
+        st.markdown(st.session_state.practice)
 
-        st.markdown(
-        simple_llm(f"Create 5 exercises for {goal}")
-        )
-
-    # Reading
-    if st.session_state.resource_decision.get("use_reading_guides", True):
+    if st.session_state.resource_decision.get("use_reading_guides",True):
 
         st.subheader("📖 Reading Guide")
-
-        st.markdown(
-        simple_llm(f"Create reading guide for {goal}")
-        )
+        st.markdown(st.session_state.reading)
 
     st.divider()
 
 # ================= HISTORY =================
 with st.expander("🗂️ History"):
 
-    for i, h in enumerate(st.session_state.history):
+    for i,h in enumerate(st.session_state.history):
 
         st.markdown(f"### Version {i+1}")
-
         st.markdown(h)
-
         st.divider()
