@@ -44,7 +44,7 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 
 # ---------------- CONFIG ----------------
-GEMMA_MODEL = "gemma-3-12b-it"
+GEMMA_MODEL = "gemini-2.5-flash"
 TTS_MODEL = "gemini-2.5-flash-preview-tts"
 
 st.set_page_config(page_title="AI Roleplay Story", layout="wide")
